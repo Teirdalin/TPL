@@ -1,0 +1,12 @@
+.deps/
+build/
+dist/
+tests/
+__pycache__/
+*.pyc
+*.user
+*.pdb
+*.obj
+*.dll
+*.lib
+*.exe

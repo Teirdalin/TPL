@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "gameSha256": "a596ab4e407c67b58599c54ffb32dc1bf2b64510cdebd3fa9359ef05a576aeb1",
+  "class": "LoadSaveWindow",
+  "ownerType": ".?AVLoadSaveWindow@@",
+  "keyDelegateType": ".?AV?$CMethodDelegate3@VLoadSaveWindow@@PEAVWidget@MyGUI@@UKeyCode@3@I@delegates@MyGUI@@",
+  "closeDelegateType": ".?AV?$CMethodDelegate1@VLoadSaveWindow@@PEAVWidget@MyGUI@@@delegates@MyGUI@@",
+  "keyStrings": ["This save file is currently in use and cannot be deleted", "Are you sure you want to delete this save game?", "Delete Save"],
+  "bindings": [
+    {"id": 1, "name": "LoadSaveWindow::construct", "discovery": "constructor"},
+    {"id": 2, "name": "LoadSaveWindow::close", "discovery": "closeDelegate"},
+    {"id": 3, "name": "LoadSaveWindow::keyPressed", "discovery": "keyDelegate"},
+    {"id": 4, "name": "ForgottenGUI::messageBox", "discovery": "confirmationCall"}
+  ],
+  "abiReview": "VC100 x64 /MD; signatures reviewed against owned plugin import metadata and game call sites; opaque types only",
+  "runtimeVerified": false
+}

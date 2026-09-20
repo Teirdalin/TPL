@@ -1,0 +1,22 @@
+The Jelly Doughnut License (JDL-1)
+SPDX-License-Identifier: LicenseRef-JDL-1
+
+Copyright (c) 2026 Teirdalin.
+
+Teirdalin's original code, binaries, and documentation for Teirdalin's Plugin
+Loader (TPL) are licensed under JDL-1. The complete reusable terms are in
+Licenses/JDL-1.txt and form part of this license notice.
+
+You may modify TPL for your own personal use without requesting permission
+or publishing your changes. Redistribution of modified or unmodified TPL,
+and modifications for other purposes, require Teirdalin's prior written
+permission, except as separately authorized, including the plugin-development
+permission in PLUGIN_API_PERMISSION.md.
+
+Independent plugins are NOT automatically licensed under JDL-1. Their creators
+may choose JDL-1, a different license, or proprietary terms. A plugin adopting
+JDL-1 permits personal-use modifications under section 3. Any additional
+permission must come from its own rights holder under that plugin's terms,
+not from Teirdalin merely as TPL's author.
+
+Third-party components retain their own licenses. See THIRD_PARTY_NOTICES.md.

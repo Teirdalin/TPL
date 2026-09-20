@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "gameSha256": "a596ab4e407c67b58599c54ffb32dc1bf2b64510cdebd3fa9359ef05a576aeb1",
+  "bindings": [
+    {
+      "id": 1000,
+      "name": "GameWorld::updateGraphics",
+      "select": { "functionSha256": "3eaa741345be5c94aff5361536cf237b623ace27779b92a3efdb46c989bf89fd" },
+      "abi": { "convention": "msvc-x64", "return": "void", "parameters": ["GameWorld*", "float"], "opaqueTypes": ["GameWorld"] },
+      "review": {
+        "approved": true,
+        "reviewer": "Codex: independent pinned-binary ABI review",
+        "evidenceFile": "docs/WORLD_BINDING_REVIEW.md",
+        "evidenceSha256": "8fda9a21a75215610495828c761c8c2a3de09674cc7cc5d9af883fc7593aa0ea"
+      }
+    },
+    {
+      "id": 1001,
+      "name": "GameWorld::resetGame",
+      "select": { "functionSha256": "6e2a39c8b80d623064909c6a0192ee801ab93500093ab75db60ce8e6d731e485", "stringsAll": ["Reset game"] },
+      "abi": { "convention": "msvc-x64", "return": "void", "parameters": ["GameWorld*"], "opaqueTypes": ["GameWorld"] },
+      "review": {
+        "approved": true,
+        "reviewer": "Codex: independent pinned-binary ABI review",
+        "evidenceFile": "docs/WORLD_BINDING_REVIEW.md",
+        "evidenceSha256": "8fda9a21a75215610495828c761c8c2a3de09674cc7cc5d9af883fc7593aa0ea"
+      }
+    },
+    {
+      "id": 1002,
+      "name": "GameWorld::destruct",
+      "select": { "functionSha256": "98c005e3bf28d046500177a70ce0620f4b5f20b7fa4305ccc695036e1d682d99" },
+      "abi": { "convention": "msvc-x64", "return": "void", "parameters": ["GameWorld*"], "opaqueTypes": ["GameWorld"] },
+      "review": {
+        "approved": true,
+        "reviewer": "Codex: independent pinned-binary ABI review",
+        "evidenceFile": "docs/WORLD_BINDING_REVIEW.md",
+        "evidenceSha256": "8fda9a21a75215610495828c761c8c2a3de09674cc7cc5d9af883fc7593aa0ea"
+      }
+    }
+  ]
+}

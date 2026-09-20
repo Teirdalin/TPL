@@ -1,0 +1,314 @@
+#include "catalog.h"
+#include "legacy.h"
+#include "compat.h"
+#include "tpllib_internal.h"
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
+#include <tlhelp32.h>
+
+namespace tpl {
+Catalog catalog;
+static std::wstring key(const std::wstring& path) { return lower(fullPath(path)); }
+static std::string jsonText(const rapidjson::Value& v,const char* field,const std::string& fallback="") {
+    return v.HasMember(field)&&v[field].IsString() ? v[field].GetString() : fallback;
+}
+static void parse(const std::string& bytes, rapidjson::Document& d) {
+    d.Parse<rapidjson::kParseValidateEncodingFlag>(bytes.c_str());
+    if(d.HasParseError()||!d.IsObject()) throw std::runtime_error("Invalid JSON object");
+}
+static void configFiles(const std::wstring& base,const std::wstring& dir,int depth,std::vector<std::wstring>& out) {
+    std::vector<std::wstring> files=list(dir,L"*.cfg",false);
+    for(size_t i=0;i<files.size() && out.size()<128;++i) if(contained(base,files[i])) out.push_back(files[i]);
+    if(depth==0 || out.size()>=128) return;
+    std::vector<std::wstring> dirs=list(dir,L"*",true);
+    for(size_t i=0;i<dirs.size() && out.size()<128;++i) configFiles(base,dirs[i],depth-1,out);
+}
+void Catalog::initialize(const std::wstring& root) {
+    game=fullPath(root); home=join(game,L"TPL"); entries.clear(); active.clear(); disabled.clear(); launchOrder.clear();
+    std::wstring cfg=join(game,L"data\\mods.cfg");
+    cfgSnapshot=exists(cfg)?readFile(cfg):"";
+    std::vector<std::string> enabled=lines(cfgSnapshot);
+    for(size_t i=0;i<enabled.size();++i) {
+        std::string value=trim(enabled[i]);
+        if(i==0 && value.compare(0,3,"\xEF\xBB\xBF")==0) value=value.substr(3);
+        if(!value.empty() && value[0]!='#' && active.insert(lower(widen(value))).second) launchOrder.push_back(lower(widen(value)));
+    }
+    std::wstring state=join(home,L"state.json");
+    if(exists(state)) {
+        rapidjson::Document d; parse(readFile(state),d);
+        if(d.HasMember("disabled")&&d["disabled"].IsArray()) {
+            for(rapidjson::SizeType i=0;i<d["disabled"].Size();++i) {
+                if(!d["disabled"][i].IsString()) throw std::runtime_error("Invalid disabled entry");
+                disabled.insert(key(widen(d["disabled"][i].GetString())));
+            }
+        }
+    }
+    startupDisabled=disabled;
+    std::vector<std::wstring> roots;
+    roots.push_back(join(game,L"mods"));
+    roots.push_back(join(parent(parent(game)),L"workshop\\content\\233860"));
+    roots.push_back(join(home,L"plugins"));
+    for(size_t r=0;r<roots.size();++r) {
+        std::vector<std::wstring> dirs=list(roots[r],L"*",true);
+        for(size_t i=0;i<dirs.size();++i) {
+            try { scanFolder(dirs[i],r==1?"Workshop":"Local"); }
+            catch(const std::exception& e) { log("Catalog: "+narrow(dirs[i])+": "+e.what()); }
+        }
+    }
+    std::set<std::wstring> found;
+    for(size_t i=0;i<entries.size();++i) if(!entries[i].plugin) found.insert(lower(entries[i].modFile));
+    for(std::set<std::wstring>::const_iterator i=active.begin();i!=active.end();++i) {
+        if(found.count(*i)) continue;
+        Entry e; e.id=L"missing:"+*i; e.modFile=*i; e.name=narrow(*i); e.provider="FCS";
+        e.startEnabled=e.desiredEnabled=true; e.missing=true; e.status="Enabled; folder not found"; entries.push_back(e);
+    }
+    updateDesired();
+    for(size_t i=0;i<entries.size();++i) entries[i].startEnabled=entries[i].desiredEnabled;
+    rePresent=GetModuleHandleW(L"RE_Kenshi.dll")!=0;
+}
+void Catalog::scanFolder(const std::wstring& root,const std::string& origin) {
+    std::vector<std::wstring> mods=list(root,L"*.mod",false);
+    std::wstring owner;
+    if(mods.size()==1) {
+        Entry e; e.root=root; e.path=mods[0]; e.id=key(e.path); e.modFile=filename(e.path);
+        e.name=narrow(e.modFile.substr(0,e.modFile.size()-4)); e.provider="FCS / "+origin;
+        e.startEnabled=active.count(lower(e.modFile))!=0;
+        e.status=e.startEnabled?"Enabled at launch":"Disabled at launch";
+        entries.push_back(e); owner=e.id;
+    } else if(mods.size()>1) {
+        log("Ambiguous mod folder omitted: "+narrow(root)); return;
+    }
+    const wchar_t* manifests[]={L"TPL.json",L"RE_Kenshi.json"};
+    for(int m=0;m<2;++m) {
+        std::wstring file=join(root,manifests[m]); if(!exists(file)) continue;
+        rapidjson::Document d; parse(readFile(file),d);
+        const char* groups[]={m==0?"plugins":"Plugins","PreloadPlugins"};
+        for(int g=0;g<(m==0?1:2);++g) {
+            if(!d.HasMember(groups[g])||!d[groups[g]].IsArray()) continue;
+            const rapidjson::Value& array=d[groups[g]];
+            for(rapidjson::SizeType n=0;n<array.Size();++n) {
+                std::string dll;
+                if(m==0 && array[n].IsObject()) dll=jsonText(array[n],"dll");
+                else if(m==1 && array[n].IsString()) dll=array[n].GetString();
+                if(dll.empty()) continue;
+                std::wstring path=fullPath(join(root,widen(dll)));
+                if(!contained(root,path) || lower(path).substr(path.size()>4?path.size()-4:0)!=L".dll") { log("Rejected plugin path"); continue; }
+                std::wstring id=key(path); bool duplicate=false;
+                for(size_t p=0;p<entries.size();++p) if(entries[p].id==id) {
+                    if(m==1 && g==1 && entries[p].provider=="RE_Kenshi") entries[p].provider="RE_Kenshi preload";
+                    duplicate=true; break;
+                }
+                if(duplicate) continue;
+                Entry e; e.plugin=true; e.root=root; e.path=path; e.id=id; e.owner=owner;
+                e.name=m==0?jsonText(array[n],"name",dll):dll;
+                e.provider=m==0?"TPL":(g==0?"RE_Kenshi":"RE_Kenshi preload");
+                e.missing=!exists(path); e.status=e.missing?"DLL missing":"Not loaded";
+                entries.push_back(e);
+            }
+        }
+    }
+}
+void Catalog::refreshLaunchSelection() {
+    // The vanilla launcher may change mods.cfg after Ogre loads TPL.
+    std::wstring path=join(game,L"data\\mods.cfg");
+    cfgSnapshot=exists(path)?readFile(path):""; active.clear(); launchOrder.clear();
+    std::vector<std::string> selection=lines(cfgSnapshot);
+    for(size_t i=0;i<selection.size();++i) {
+        std::string name=trim(selection[i]);
+        if(i==0 && name.compare(0,3,"\xEF\xBB\xBF")==0) name=name.substr(3);
+        if(!name.empty() && name[0]!='#' && active.insert(lower(widen(name))).second) launchOrder.push_back(lower(widen(name)));
+    }
+    for(size_t i=0;i<entries.size();++i) if(!entries[i].plugin) {
+        Entry& e=entries[i]; e.startEnabled=active.count(lower(e.modFile))!=0;
+        if(e.startEnabled) disabled.erase(e.id);
+        e.status=e.missing?"Enabled; folder not found":(e.startEnabled?"Enabled at launch":"Disabled at launch");
+    }
+    updateDesired();
+    // Native preload decisions already made stay fixed for this process.
+    for(size_t i=0;i<entries.size();++i) if(!entries[i].attempted && (entries[i].provider=="TPL" || (!rePresent && entries[i].provider=="RE_Kenshi"))) entries[i].startEnabled=entries[i].desiredEnabled;
+}
+void Catalog::updateDesired() {
+    for(size_t i=0;i<entries.size();++i) {
+        Entry& e=entries[i];
+        if(!e.plugin) e.desiredEnabled=active.count(lower(e.modFile))!=0 && !disabled.count(e.id);
+        else {
+            e.desiredEnabled=!disabled.count(e.id) && !disabled.count(e.owner);
+            if(!e.owner.empty() && e.provider!="RE_Kenshi preload") {
+                for(size_t j=0;j<entries.size();++j) if(entries[j].id==e.owner && !active.count(lower(entries[j].modFile))) e.desiredEnabled=false;
+            }
+        }
+    }
+}
+bool Catalog::blocked(const std::wstring& path) const {
+    std::wstring id=key(path);
+    for(size_t i=0;i<entries.size();++i) {
+        const Entry& e=entries[i];
+        if(e.plugin && e.id==id) return !e.startEnabled || e.provider=="TPL";
+    }
+    return startupDisabled.count(id)!=0;
+}
+void Catalog::saveState() {
+    rapidjson::StringBuffer buffer; rapidjson::Writer<rapidjson::StringBuffer> w(buffer);
+    w.StartObject(); w.Key("disabled"); w.StartArray();
+    for(std::set<std::wstring>::const_iterator i=disabled.begin();i!=disabled.end();++i) { std::string s=narrow(*i); w.String(s.c_str()); }
+    w.EndArray(); w.EndObject(); writeFile(join(home,L"state.json"),buffer.GetString());
+}
+void Catalog::toggle(size_t index) {
+    if(index>=entries.size()) throw std::runtime_error("No mod selected");
+    Entry& e=entries[index];
+    if(e.provider=="External") throw std::runtime_error("This plugin is managed outside TPL and RE_Kenshi manifests");
+    if(e.missing) throw std::runtime_error("Locate the missing mod before changing it");
+    bool hasRe=e.provider.find("RE_Kenshi")==0;
+    for(size_t i=0;i<entries.size();++i) if(entries[i].owner==e.id && entries[i].provider.find("RE_Kenshi")==0) hasRe=true;
+    if(hasRe && rePresent && !reBridge) throw std::runtime_error("RE_Kenshi blocking is unavailable for this build");
+    if(e.plugin && !e.desiredEnabled && !e.owner.empty() && e.provider!="RE_Kenshi preload") {
+        for(size_t i=0;i<entries.size();++i) if(entries[i].id==e.owner && !entries[i].desiredEnabled)
+            throw std::runtime_error("Enable the parent mod first");
+    }
+    std::set<std::wstring> oldDisabled=disabled, oldActive=active;
+    bool enable=!e.desiredEnabled;
+    if(enable) disabled.erase(e.id); else disabled.insert(e.id);
+    if(!e.plugin) { if(enable) active.insert(lower(e.modFile)); else active.erase(lower(e.modFile)); }
+    try {
+        if(!e.plugin) {
+            std::wstring p=join(game,L"data\\mods.cfg"); std::string current=exists(p)?readFile(p):"";
+            if(current!=cfgSnapshot) throw std::runtime_error("Mod order changed externally; restart before editing");
+            std::vector<std::string> oldLines=lines(current); std::string next;
+            bool present=false;
+            for(size_t i=0;i<oldLines.size();++i) {
+                std::string value=trim(oldLines[i]);
+                if(i==0 && value.compare(0,3,"\xEF\xBB\xBF")==0) value=value.substr(3);
+                if(lower(widen(value))==lower(e.modFile)) { present=true; if(!enable) continue; }
+                next+=oldLines[i]+"\r\n";
+            }
+            if(enable && !present) next+=narrow(e.modFile)+"\r\n";
+            // Persist the restart policy first, then the FCS order; restore it if FCS saving fails.
+            saveState();
+            try { writeFile(p,next); } catch(...) { disabled=oldDisabled; saveState(); throw; }
+            cfgSnapshot=next;
+        } else saveState();
+    } catch(...) { disabled=oldDisabled; active=oldActive; throw; }
+    updateDesired();
+}
+void Catalog::observeModules() {
+    HANDLE snap=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE,GetCurrentProcessId());
+    if(snap==INVALID_HANDLE_VALUE) return;
+    MODULEENTRY32W m; ZeroMemory(&m,sizeof(m)); m.dwSize=sizeof(m);
+    if(Module32FirstW(snap,&m)) do {
+        std::wstring origin=compatibilityOrigin(m.hModule);
+        std::wstring id=key(origin.empty()?m.szExePath:origin); bool found=false;
+        for(size_t i=0;i<entries.size();++i) if(entries[i].plugin && entries[i].id==id) {
+            entries[i].loaded=true; entries[i].module=m.hModule;
+            if(!entries[i].running && !entries[i].attempted) entries[i].status="DLL loaded";
+            found=true; break;
+        }
+        if(!found && (GetProcAddress(m.hModule,"TPL_Start") || GetProcAddress(m.hModule,"?startPlugin@@YAXXZ"))) {
+            Entry e; e.plugin=true; e.path=origin.empty()?m.szExePath:origin; e.root=parent(e.path); e.id=id; e.name=narrow(filename(e.path));
+            e.provider="External"; e.loaded=true; e.startEnabled=e.desiredEnabled=true; e.status="DLL loaded; unmanaged";
+            entries.push_back(e);
+        }
+    } while(Module32NextW(snap,&m));
+    CloseHandle(snap);
+}
+void Catalog::startPlugins() {
+    if(!tpllib::initialize(&log)) { log("TPLLib initialization failed; plugin startup skipped"); return; }
+    startOrderedPlugins(false);
+    startLegacyPlugins();
+}
+void Catalog::startOrderedPlugins(bool legacy) {
+    const char* provider=legacy?"RE_Kenshi":"TPL";
+    std::vector<std::wstring> owners;
+    for(size_t n=0;n<launchOrder.size();++n) {
+        std::wstring owner; size_t count=0;
+        for(size_t i=0;i<entries.size();++i) if(!entries[i].plugin && lower(entries[i].modFile)==launchOrder[n]) { owner=entries[i].id; ++count; }
+        if(count==1) owners.push_back(owner);
+        else if(count>1) for(size_t i=0;i<entries.size();++i) {
+            Entry& e=entries[i];
+            for(size_t j=0;j<entries.size();++j) if(entries[j].id==e.owner && lower(entries[j].modFile)==launchOrder[n] && e.provider==provider) {
+                e.attempted=true; e.status="Ambiguous mod folders; skipped";
+            }
+        }
+    }
+    owners.push_back(L"");
+    for(size_t n=0;n<owners.size();++n) for(size_t i=0;i<entries.size();++i) {
+        Entry& e=entries[i];
+        if(legacy && GetModuleHandleW(L"RE_Kenshi.dll")) { rePresent=true; return; }
+        if(e.provider==provider && e.owner==owners[n] && e.startEnabled && !e.missing && !e.attempted) startEntry(e,legacy);
+    }
+}
+void Catalog::startLegacyPlugins() {
+    rePresent=rePresent || GetModuleHandleW(L"RE_Kenshi.dll")!=0;
+    if(rePresent) return;
+    startOrderedPlugins(true);
+    for(size_t i=0;i<entries.size();++i) {
+        Entry& e=entries[i];
+        if(e.provider=="RE_Kenshi preload" && e.startEnabled && !e.attempted) {
+            e.attempted=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
+        }
+    }
+}
+void Catalog::startEntry(Entry& e,bool legacy) {
+    static TPL_Host host={sizeof(TPL_Host),TPL_ABI_VERSION,0,&log,&tpllib::getAPI}; host.game_directory=game.c_str();
+    e.attempted=true;
+    try {
+        if(GetModuleHandleW(e.path.c_str())) { e.status="Already loaded; initialization skipped"; return; }
+        HMODULE h=0; bool bridged=false;
+        if(legacy) {
+            CompatibilityPlan plan=compatibilityPlan(e.path,e.root,game);
+            if(plan.needsBridge) {
+                std::wstring report=compatibilityReport(e.path,game,plan);
+                log(e.name+": compatibility report "+narrow(report));
+            }
+            if(!plan.eligible) { e.status=plan.reason; log(e.name+": "+e.status); return; }
+            if(plan.needsBridge) {
+                std::wstring cachedPath;
+                h=loadCompatibility(e.path,e.root,game,plan,cachedPath); bridged=true;
+            }
+        }
+        if(!h) h=LoadLibraryExW(e.path.c_str(),0,LOAD_WITH_ALTERED_SEARCH_PATH);
+        if(!h) { DWORD error=GetLastError(); std::ostringstream message; message<<"DLL load failed (Windows "<<error<<")"; e.status=message.str(); log(e.name+": "+e.status); return; }
+        e.module=h; e.loaded=true;
+        if(legacy) {
+            typedef void (*LegacyStart)();
+            LegacyStart start=(LegacyStart)GetProcAddress(h,"?startPlugin@@YAXXZ");
+            if(!start) { e.status="Missing legacy startPlugin export"; log(e.name+": "+e.status); return; }
+            start(); e.running=true; e.status=bridged?"Legacy start returned (TPLLib bridge)":"Legacy start returned (TPL)"; log(e.name+": "+e.status); return;
+        }
+        TPL_StartFn start=(TPL_StartFn)GetProcAddress(h,"TPL_Start");
+        if(!start) { e.status="Missing TPL_Start"; return; }
+        if(start(&host)!=0) { e.status="Initialization failed"; return; }
+        e.tick=(TPL_TickFn)GetProcAddress(h,"TPL_Tick"); e.running=true; e.status="Running";
+    } catch(const std::exception& error) { e.status=std::string("Initialization exception: ")+error.what(); log(e.name+": "+e.status); }
+    catch(...) { e.status="Initialization threw an exception"; log(e.name+": initialization exception"); }
+}
+void Catalog::tick(float dt) {
+    tpllib::frame(dt);
+    for(size_t i=0;i<entries.size();++i) if(entries[i].running && entries[i].tick) {
+        try { entries[i].tick(dt); } catch(...) { entries[i].tick=0; entries[i].status="Tick failed; callbacks stopped"; }
+    }
+}
+std::vector<std::wstring> Catalog::configs(size_t index) const {
+    std::vector<std::wstring> out;
+    if(index<entries.size() && !entries[index].root.empty() && entries[index].provider!="External") configFiles(entries[index].root,entries[index].root,4,out);
+    return out;
+}
+void ConfigDocument::open(const std::wstring& file) {
+    path=file; original=readFile(path,256*1024); text=original;
+    bom=text.compare(0,3,"\xEF\xBB\xBF")==0; if(bom) text=text.substr(3);
+    if(text.find('\0')!=std::string::npos) throw std::runtime_error("Binary or UTF-16 config: edit externally");
+    widen(text); crlf=text.find("\r\n")!=std::string::npos;
+    std::string normalized;
+    for(size_t i=0;i<text.size();++i) if(text[i]!='\r' || i+1==text.size() || text[i+1]!='\n') normalized+=text[i];
+    text=normalized;
+}
+void ConfigDocument::save(const std::string& value) {
+    if(value.size()>256*1024 || value.find('\0')!=std::string::npos) throw std::runtime_error("Config exceeds the text limit");
+    widen(value);
+    if(readFile(path,256*1024)!=original) throw std::runtime_error("File changed externally; reopen it before saving");
+    if(value==text) return;
+    std::string bytes=bom?"\xEF\xBB\xBF":"";
+    for(size_t i=0;i<value.size();++i) { if(crlf && value[i]=='\n' && (i==0||value[i-1]!='\r')) bytes+='\r'; bytes+=value[i]; }
+    writeFile(path,bytes); original=bytes; text=value;
+}
+}
