@@ -24,7 +24,7 @@ typedef struct TPLLib_Engine_Info {
 } TPLLib_Engine_Info;
 /* Exact-build, GUI-thread native addresses, not portable game-object handles.
    Resolution proves identity/bytes, NOT lifetime or a valid call context.
-   See TPLLIB_ENGINE.md before calling or hooking these functions. */
+   See docs/developers/API_REFERENCE.md before using these functions. */
 typedef struct TPLLib_Engine_API {
     uint32_t size, version, count, reserved;
     const char* game_sha256;

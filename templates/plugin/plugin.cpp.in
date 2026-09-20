@@ -1,0 +1,53 @@
+// TPL starter portions: Copyright (c) 2026 Teirdalin.
+// Adapted by the project generator; reuse permitted by sdk/PLUGIN_API_PERMISSION.md.
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <wchar.h>
+#include "tpl_plugin.hpp"
+
+static tpl::Plugin plugin;
+static bool firstTick=false;
+
+static bool readLogSetting() {
+    HMODULE module=0;
+    wchar_t path[MAX_PATH];
+    if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        reinterpret_cast<LPCWSTR>(&readLogSetting),&module)) return true;
+    DWORD length=GetModuleFileNameW(module,path,MAX_PATH);
+    if(!length || length>=MAX_PATH) { plugin.log("__TPL_PLUGIN_NAME__: config path unavailable; using defaults"); return true; }
+    wchar_t* slash=wcsrchr(path,L'\\');
+    if(!slash) return true;
+    size_t remaining=MAX_PATH-static_cast<size_t>(slash+1-path);
+    if(remaining<11) return true;
+    wcscpy_s(slash+1,remaining,L"plugin.cfg");
+    return GetPrivateProfileIntW(L"Plugin",L"log_first_tick",1,path)!=0;
+}
+
+extern "C" __declspec(dllexport) int TPL_Start(const TPL_Host* host) {
+    try {
+        TPLLib_Status status=plugin.connect(host,"__TPL_PLUGIN_NAME__");
+        if(status!=TPLLIB_OK) {
+            plugin.log("__TPL_PLUGIN_NAME__: startup failed; TPL 0.1.0+ and its GUI-thread API are required");
+            return 1;
+        }
+        firstTick=readLogSetting();
+        plugin.log("__TPL_PLUGIN_NAME__: initialized");
+        return 0;
+    } catch(...) {
+        // Exceptions must stay inside the plugin's compiler/runtime boundary.
+        firstTick=false;
+        return 1;
+    }
+}
+
+extern "C" __declspec(dllexport) void TPL_Tick(float dt) {
+    try {
+        (void)dt;
+        if(firstTick) {
+            firstTick=false;
+            plugin.log("__TPL_PLUGIN_NAME__: first GUI tick");
+        }
+        // Add bounded GUI-thread work here. This is not a simulation/load event.
+    } catch(...) { firstTick=false; }
+}

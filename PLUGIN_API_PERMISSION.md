@@ -3,7 +3,7 @@
 Copyright (c) 2026 Teirdalin.
 
 This is Teirdalin's separate written permission under JDL-1 section 5. It is
-specific to the TPL API and example identified below; it is not a requirement
+specific to the TPL API and examples identified below; it is not a requirement
 that plugin creators adopt JDL-1 for their own code.
 
 You may create, use, modify, distribute, sublicense, and sell your own
@@ -16,7 +16,9 @@ for developing or distributing a plugin.
 For plugin development, Teirdalin permits copying, adapting, compiling, and
 distributing `include/tpl.h`, `include/tpllib.h`, `include/tpllib_ui.h`,
 `include/tpllib_engine.h`, `include/tpllib_engine_save.hpp`,
-the generated SDK header `include/tpllib_engine_generated.hpp`,
+the generated SDK header `include/tpllib_engine_generated.hpp`, `include/tpl_plugin.hpp`,
+the project templates under `templates/plugin/` and `tools/New-TPLPlugin.ps1`,
+the examples under `examples/sdk/` and code snippets in `docs/developers/`,
 `tests/sample.cpp`, `examples/tpllib-diagnostics.cpp`, and `examples/save-menu.cpp`,
 including modified forms,
 within plugins and plugin-development kits. Retain their copyright notices

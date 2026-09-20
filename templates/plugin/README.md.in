@@ -1,0 +1,30 @@
+# __TPL_PLUGIN_NAME__
+
+Generated from the TPL developer kit. This is a native-only plugin; no `.mod`
+file or KenshiLib import library is needed for the starter.
+
+1. Install Visual Studio 2022/Build Tools with Desktop development with C++,
+   v143 and a Windows SDK. Open `__TPL_PLUGIN_NAME__.vcxproj` or run `./build.ps1`.
+2. With Kenshi closed, run `./deploy.ps1 -GameDir "YOUR KENSHI FOLDER"`.
+3. Start Kenshi, check Mods and the game's `TPL.log` for
+   `__TPL_PLUGIN_NAME__: initialized` and `__TPL_PLUGIN_NAME__: first GUI tick`.
+4. Edit `src/plugin.cpp`, rebuild, close Kenshi, and deploy with `-Replace`.
+   A backup is retained. Existing `plugin.cfg` values are preserved.
+5. Before distribution, add your own `LICENSE`, set a new version in
+   `plugin-project.json`, and run `./package.ps1`. Players extract the ZIP
+   into `Kenshi/TPL/plugins`; do not nest it inside a second plugin folder.
+
+`plugin.cfg` is an ASCII INI example read on startup. Set `log_first_tick=0`
+to suppress its one-time frame log. TPL's Config editor does not automatically
+reload plugin settings. Your future UTF-8/config schema needs its own parser.
+
+The modern-compiler target uses only the public C API and a private static CRT.
+Do not pass C++ strings, exceptions or allocated ownership to the host. It is
+not a target for raw Kenshi/MyGUI/Ogre C++ ABI calls. Keep the DLL and PDB pair.
+
+Choose your own plugin license. Only the copied TPL header/template portions
+carry the notices in `sdk/PLUGIN_API_PERMISSION.md`; your plugin is not
+automatically JDL-1. Build/package/deploy do not publish anything online.
+
+[Full developer guide](https://github.com/Teirdalin/TPL/blob/main/docs/developers/README.md):
+API reference, recipes, lifecycle, migration and troubleshooting.

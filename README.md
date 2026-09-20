@@ -35,7 +35,22 @@ plugins are not included in the distribution.
 
 ## Plugin development
 
-Place a DLL and `TPL.json` in a mod folder or `TPL/plugins/<name>`:
+Start with the [developer guide](docs/developers/README.md) or download the
+[standalone SDK](https://github.com/Teirdalin/TPL/releases/download/v0.1.0/TPL-SDK-0.1.0.zip).
+The kit includes a VS2022 project generator, working config, build/deploy/package
+scripts, compilable examples, full public API reference and troubleshooting.
+Ordinary C-API plugins do not need to rebuild TPL or link KenshiLib.
+
+```powershell
+./tools/New-TPLPlugin.ps1 -Name MyFirstMod -Destination C:\KenshiMods\MyFirstMod
+```
+
+The generated folder contains the project and its local SDK headers. Run its
+`build.ps1`, then `deploy.ps1 -GameDir "YOUR KENSHI FOLDER"` with Kenshi closed.
+Replacement retains a backup and preserves config. See the
+[quickstart](docs/developers/QUICKSTART.md) for the complete workflow.
+
+A plugin's DLL and `TPL.json` live in a mod folder or `TPL/plugins/<name>`:
 
 ```json
 {"plugins":[{"name":"My Plugin","dll":"MyPlugin.dll"}]}
@@ -44,8 +59,9 @@ Place a DLL and `TPL.json` in a mod folder or `TPL/plugins/<name>`:
 Export `extern "C" int TPL_Start(const TPL_Host*)`, returning zero on success.
 Optional `TPL_Tick(float)` runs on the GUI thread. Initialization is at the
 main menu; early startup and live DLL unloading are unsupported. Public
-interfaces are in `include/`; native game bindings require the reviewed build
-and ABI. Resolve all hook targets before modifying their entries.
+interfaces are in `include/`. The modern starter is for C tables only; native
+game C++ bindings still require the reviewed build and legacy ABI. This toolkit
+improves authoring, not full KenshiLib API parity.
 
 ## Updates
 

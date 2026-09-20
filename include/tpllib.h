@@ -69,7 +69,7 @@ typedef void (*TPLLib_Frame)(void* user, float dt);
    All calls except post, cancel_job, read_memory, module_info, resolve_rva,
    find_unique, is_main_thread, log and status_text require the GUI thread.
    Caller-owned pointers must remain valid for the call/callback lifetime.
-   See docs/TPLLIB.md for capacities, cancellation and hook lifetime rules. */
+   See docs/developers/API_REFERENCE.md for capacities and lifetime rules. */
 typedef struct TPLLib_API {
     uint32_t size;
     uint32_t abi_version;
