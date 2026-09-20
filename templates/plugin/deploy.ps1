@@ -36,6 +36,6 @@ foreach($path in $files.Keys) {
     if($files[$path] -eq 'plugin.cfg' -and (Test-Path -LiteralPath $dest)){continue}
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
     Copy-Item -LiteralPath $path -Destination $dest -Force
-    if((Get-FileHash -LiteralPath $path).Hash -ne (Get-FileHash -LiteralPath $dest).Hash){throw 'Deployed file checksum mismatch.'}
+    if((Get-PluginSha256 $path) -ne (Get-PluginSha256 $dest)){throw 'Deployed file checksum mismatch.'}
 }
 Write-Output "Deployed to $target. Config preserved; saves, mod order and loader settings unchanged. Restart Kenshi to test."

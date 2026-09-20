@@ -16,7 +16,7 @@ $root=Split-Path -Parent $PSScriptRoot
 $template=Join-Path $root 'templates\plugin'
 $mapping=[ordered]@{'plugin.cpp.in'='src\plugin.cpp';'plugin.vcxproj.in'=($Name+'.vcxproj');'README.md.in'='README.md';'plugin.cfg'='plugin.cfg';'build.ps1'='build.ps1';'package.ps1'='package.ps1';'deploy.ps1'='deploy.ps1';'project-tools.ps1'='project-tools.ps1'}
 foreach($file in $mapping.Keys){if(!(Test-Path -LiteralPath (Join-Path $template $file))){throw "SDK template missing: $file"}}
-foreach($file in @('include\tpl.h','include\tpllib.h','include\tpl_plugin.hpp','PLUGIN_API_PERMISSION.md','Licenses\JDL-1.txt')) {
+foreach($file in @('include\tpl.h','include\tpllib.h','include\tpl_plugin.hpp','PLUGIN_API_PERMISSION.md','Licenses\JDL-1.txt','Licenses\JDL.png')) {
     if(!(Test-Path -LiteralPath (Join-Path $root $file))){throw "SDK file missing: $file"}
 }
 $utf8=New-Object Text.UTF8Encoding($false)
@@ -35,6 +35,7 @@ Get-ChildItem -LiteralPath (Join-Path $root 'include') -File | Where-Object {$_.
 }
 Copy-Item -LiteralPath (Join-Path $root 'PLUGIN_API_PERMISSION.md') -Destination $sdk
 Copy-Item -LiteralPath (Join-Path $root 'Licenses\JDL-1.txt') -Destination (Join-Path $sdk 'Licenses')
+Copy-Item -LiteralPath (Join-Path $root 'Licenses\JDL.png') -Destination (Join-Path $sdk 'Licenses')
 $manifest=[ordered]@{plugins=@([ordered]@{name=$DisplayName;dll=($Name+'.dll')})}
 $project=[ordered]@{schema=1;name=$Name;displayName=$DisplayName;version='0.1.0';tplMinimum='0.1.0'}
 [IO.File]::WriteAllText((Join-Path $Destination 'TPL.json'),($manifest | ConvertTo-Json -Depth 4),$utf8)

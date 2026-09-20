@@ -1,5 +1,11 @@
 # TPL scaffold helper. Reuse permitted by sdk/PLUGIN_API_PERMISSION.md.
 $ErrorActionPreference='Stop'
+function Get-PluginSha256([string]$Path) {
+    $stream=[IO.File]::OpenRead($Path)
+    $algorithm=[Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-','') }
+    finally { $algorithm.Dispose(); $stream.Dispose() }
+}
 function Read-PluginProject {
     $project=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'plugin-project.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     if($project.schema -ne 1 -or $project.name -notmatch '^[A-Za-z][A-Za-z0-9_]{0,47}$' -or

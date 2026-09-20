@@ -1,5 +1,17 @@
 # Porting an RE_Kenshi plugin
 
+For a non-destructive first pass, run the project converter from the TPL root:
+
+```powershell
+python tools/convert-rekenshi-project.py C:\path\to\LegacyMod `
+  --output C:\path\to\LegacyMod-TPL-Migration
+```
+
+It inventories manifests, source signals, and available DLL imports/exports,
+then creates a clean TPL starter and migration report. It never edits the source
+tree or generates unreviewed native addresses. A `native-bridge-required`
+classification is a review gate, not a failed conversion.
+
 TPL-native plugin development and running an unchanged RE_Kenshi DLL are two
 different tasks. Renaming a DLL or changing a manifest does not replace its
 imports, runtime initialization, object layouts or hook manager.

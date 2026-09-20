@@ -15,5 +15,5 @@ $zip=[IO.Compression.ZipFile]::Open($output,[IO.Compression.ZipArchiveMode]::Cre
 try {
     foreach($path in $files.Keys){[void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,$path,($project.name+'/'+($files[$path] -replace '\\','/')))}
 } finally {$zip.Dispose()}
-[IO.File]::WriteAllText(($output+'.sha256'),(Get-FileHash -LiteralPath $output).Hash.ToLowerInvariant())
+[IO.File]::WriteAllText(($output+'.sha256'),(Get-PluginSha256 $output).ToLowerInvariant())
 Write-Output "Packaged: $output (DLL, manifest, config and notices; no source, PDB, SDK implementation or loader)."

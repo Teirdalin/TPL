@@ -13,5 +13,6 @@ if(!$MSBuildPath -or !(Test-Path -LiteralPath $MSBuildPath -PathType Leaf)) {
 & $MSBuildPath (Join-Path $PSScriptRoot ($project.name+'.vcxproj')) /nologo /m /v:minimal /p:Configuration=Release /p:Platform=x64
 if($LASTEXITCODE){throw 'Plugin build failed. Fix the first compiler error above.'}
 $payload=Get-PluginPayload $project -Symbols
-Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('build\x64\Release\'+$project.name+'.dll'))
+$dll=Join-Path $PSScriptRoot ('build\x64\Release\'+$project.name+'.dll')
+Write-Output ('SHA256 '+(Get-PluginSha256 $dll)+'  '+$dll)
 Write-Output 'Built Release x64. No game files changed. Keep the matching DLL/PDB pair for debugging.'
