@@ -1,22 +1,135 @@
 The Jelly Doughnut License (JDL-1)
-SPDX-License-Identifier: LicenseRef-JDL-1
+Version 1.0 - 20 September 2026
+Custom SPDX identifier: LicenseRef-JDL-1
+
+Application notice for Teirdalin's Plugin Loader
 
 Copyright (c) 2026 Teirdalin.
 
-Teirdalin's original code, binaries, and documentation for Teirdalin's Plugin
-Loader (TPL) are licensed under JDL-1. The complete reusable terms are in
-Licenses/JDL-1.txt and form part of this license notice.
+"Work" means Teirdalin's original source code, binaries, documentation, and
+other original material in Teirdalin's Plugin Loader (TPL), except material
+identified as third-party or covered by a separate permission. "Creator" means
+Teirdalin for those rights. TPL is licensed under the complete JDL-1 terms below.
 
-You may modify TPL for your own personal use without requesting permission
-or publishing your changes. Redistribution of modified or unmodified TPL,
-and modifications for other purposes, require Teirdalin's prior written
-permission, except as separately authorized, including the plugin-development
-permission in PLUGIN_API_PERMISSION.md.
+Independent plugins are not automatically licensed under JDL-1. Their creators
+may choose JDL-1, another license, or proprietary terms. TPL's public API,
+templates, and identified examples also have the separate permissions stated in
+PLUGIN_API_PERMISSION.md. Third-party components retain the terms identified in
+THIRD_PARTY_NOTICES.md.
 
-Independent plugins are NOT automatically licensed under JDL-1. Their creators
-may choose JDL-1, a different license, or proprietary terms. A plugin adopting
-JDL-1 permits personal-use modifications under section 3. Any additional
-permission must come from its own rights holder under that plugin's terms,
-not from Teirdalin merely as TPL's author.
+1. Definitions
 
-Third-party components retain their own licenses. See THIRD_PARTY_NOTICES.md.
+"Work" means the source code, binaries, documentation, artwork, or other
+material identified by an accompanying notice that expressly applies JDL-1.
+
+"Creator" means each copyright holder who applies JDL-1 to the Work, or a
+person authorized to grant permission for that holder's rights. This license
+grants only rights controlled by the Creator.
+
+"Personal Use" means private use by an individual for that individual's own
+purposes, without supplying the Work or a modified version to another person
+or organization and without making it publicly available.
+
+"Distribute" means to provide, upload, publish, mirror, transmit, sublicense,
+sell, rent, repackage, bundle, or otherwise make a copy of the Work available
+to another person or organization, whether in source or binary form and
+whether modified or unmodified.
+
+2. Voluntary adoption and scope
+
+JDL-1 applies to a Work only when its Creator expressly adopts JDL-1 in a
+notice accompanying that Work. The notice should identify the Work and its
+Creator. Material not identified by that notice is not placed under JDL-1.
+
+Using, linking to, interoperating with, or making a plugin for a JDL-1 Work
+does not by itself place an independent work under JDL-1. Each creator chooses
+the terms for rights they control. Choosing JDL-1 transfers no ownership or
+approval authority to the author of another program or of this license text.
+
+3. Ordinary use and backups
+
+You may install and use lawfully obtained copies of the Work. You may make the
+copies reasonably needed to install, run, update, and back up the Work for your
+own use. You may inspect source code that the Creator has made available.
+
+Changing user-configurable settings and creating saves, logs, configuration
+files, or other user data through ordinary use of the Work are permitted and
+are not treated as modifications of the Work under this license.
+
+4. Personal-use modifications
+
+You may modify, adapt, translate, compile, and create derivative versions of a
+lawfully obtained copy of the Work for Personal Use. You may run those versions
+and keep private backup copies without requesting permission from the Creator.
+You are not required to disclose or publish your changes or source code.
+
+This permission does not authorize Distribution. It also does not authorize
+modifications for purposes outside Personal Use. Those activities require the
+Creator's prior written permission unless a separate permission applies.
+Credit, noncommercial intent, or an intention to improve the Work does not by
+itself grant permission to Distribute or to make other modifications.
+
+5. Distribution requires permission
+
+You may not Distribute the Work without the Creator's prior written permission,
+except to the extent a separate permission expressly allows it. This restriction
+applies to modified and unmodified copies and includes modpacks, installers,
+mirrors, forks, compilations, and bundles containing the Work.
+
+You may link to a copy that the Creator has authorized for download. Public
+source availability, access through a public repository, or the technical
+ability to fork a repository grants no additional license rights.
+
+6. Separate permissions and independent works
+
+The Creator may publish or directly provide a separate written permission for
+particular modifications, uses, or distributions. Electronic permission and a
+public permission notice count as written permission. Follow its stated scope
+and conditions; permission for one action does not imply permission for others.
+
+When Distribution is separately authorized, you must retain the applicable
+copyright, JDL-1, and separate-permission notices unless the Creator expressly
+allows their removal. No right to sublicense the Creator's material is granted
+unless the separate permission says so.
+
+JDL-1 does not require any Creator or recipient to publish, upload, or provide
+source code. It does not give the Creator ownership of independently authored
+work merely because that work interacts with the Work. Rights in third-party
+material must be obtained from the appropriate rights holder.
+
+7. Reserved rights and termination
+
+Rights not expressly granted are reserved. JDL-1 grants no trademark rights
+except the limited use reasonably necessary to identify the Work, the Creator,
+and the applicable license accurately. It does not authorize false claims of
+authorship, approval, sponsorship, or endorsement.
+
+Your rights under JDL-1 terminate automatically if you materially violate its
+terms. If the violation is curable, those rights are reinstated provisionally
+when you stop the violation and permanently if the Creator does not notify you
+of the violation within 30 days after you cured it. This does not limit the
+Creator's remedies for the period of violation or for an incurable violation.
+
+Nothing in JDL-1 limits rights that applicable law does not permit a license to
+restrict. Third-party components retain their own licenses and notices, which
+JDL-1 does not replace or override.
+
+8. Warranty and liability
+
+To the fullest extent permitted by applicable law, the Work is provided "AS
+IS", without warranties of any kind, express or implied, including warranties
+of merchantability, fitness for a particular purpose, title, and
+noninfringement. To the fullest extent permitted by applicable law, the Creator
+and contributors are not liable for claims, damages, or other liability arising
+from the Work or its use, whether in contract, tort, or otherwise.
+
+9. Reusing the license text
+
+Anyone may copy and distribute this license text verbatim to apply JDL-1 to
+their own work or to accompany an authorized copy, without separate permission
+or a fee. Identify that work and its Creator in an accompanying notice. This
+permission covers the JDL-1 text itself, not another Creator's Work.
+
+Altered terms must use a different license name and identifier and must not be
+presented as JDL-1. Formatting changes that do not alter the words or meaning
+do not create a different license.

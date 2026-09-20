@@ -1,90 +1,120 @@
 The Jelly Doughnut License (JDL-1)
-Custom license reference: LicenseRef-JDL-1
+Version 1.0 - 20 September 2026
+Custom SPDX identifier: LicenseRef-JDL-1
 
-1. Voluntary adoption and scope
+1. Definitions
 
-This license applies to a work only if its copyright holder expressly chooses
-it in a notice accompanying that work. The "Work" means the material identified
-in that notice. The "Creator" means the copyright holder or holders granting
-this license, or a representative authorized to grant the relevant permissions.
-Only rights controlled by those holders are granted.
+"Work" means the source code, binaries, documentation, artwork, or other
+material identified by an accompanying notice that expressly applies JDL-1.
 
-Using, linking to, or making a plugin for another program does not by itself
-place your work under this license. Creators may choose this license or other
-terms for their own work. Choosing this license transfers no ownership or
+"Creator" means each copyright holder who applies JDL-1 to the Work, or a
+person authorized to grant permission for that holder's rights. This license
+grants only rights controlled by the Creator.
+
+"Personal Use" means private use by an individual for that individual's own
+purposes, without supplying the Work or a modified version to another person
+or organization and without making it publicly available.
+
+"Distribute" means to provide, upload, publish, mirror, transmit, sublicense,
+sell, rent, repackage, bundle, or otherwise make a copy of the Work available
+to another person or organization, whether in source or binary form and
+whether modified or unmodified.
+
+2. Voluntary adoption and scope
+
+JDL-1 applies to a Work only when its Creator expressly adopts JDL-1 in a
+notice accompanying that Work. The notice should identify the Work and its
+Creator. Material not identified by that notice is not placed under JDL-1.
+
+Using, linking to, interoperating with, or making a plugin for a JDL-1 Work
+does not by itself place an independent work under JDL-1. Each creator chooses
+the terms for rights they control. Choosing JDL-1 transfers no ownership or
 approval authority to the author of another program or of this license text.
 
-2. Ordinary use
+3. Ordinary use and backups
 
-You may install and use lawfully obtained copies of the Work and make copies
-needed for your own use and backup. You may inspect source made available by
-the Creator. Personal-use modifications are permitted under section 3;
-distribution to others remains subject to section 4. Changing user-configurable
-settings and creating personal saves or
-other user data in the ordinary use of the Work are permitted and are not
-treated as modifications of the Work under this license.
+You may install and use lawfully obtained copies of the Work. You may make the
+copies reasonably needed to install, run, update, and back up the Work for your
+own use. You may inspect source code that the Creator has made available.
 
-3. Personal-use modifications
+Changing user-configurable settings and creating saves, logs, configuration
+files, or other user data through ordinary use of the Work are permitted and
+are not treated as modifications of the Work under this license.
 
-You may modify, adapt, translate, and create derivative versions of lawfully
-obtained copies of the Work for your own personal use. You may compile, run,
-and keep private backup copies of those versions without requesting permission
-from the Creator. You are not required to disclose or publish your changes
-or source code.
+4. Personal-use modifications
 
-This permission does not authorize supplying modified copies to others.
-Redistribution of modified or unmodified copies requires the Creator's prior
-written permission under section 4. Modifications for purposes other than
-your own personal use require the Creator's prior written permission unless
-separately authorized. Being free, credited, or intended as an improvement
-does not by itself authorize redistribution or other uses.
+You may modify, adapt, translate, compile, and create derivative versions of a
+lawfully obtained copy of the Work for Personal Use. You may run those versions
+and keep private backup copies without requesting permission from the Creator.
+You are not required to disclose or publish your changes or source code.
 
-4. Redistribution requires the Creator's permission
+This permission does not authorize Distribution. It also does not authorize
+modifications for purposes outside Personal Use. Those activities require the
+Creator's prior written permission unless a separate permission applies.
+Credit, noncommercial intent, or an intention to improve the Work does not by
+itself grant permission to Distribute or to make other modifications.
 
-Unless separately authorized by the Creator in writing, you may not upload,
-mirror, redistribute, repackage, sublicense, sell, rent, or otherwise supply
-copies of the Work to others, whether modified or unmodified, in source or
-binary form. This includes bundling the Work with another product or modpack.
-Linking to a download authorized by the Creator is permitted. Public source
-availability alone grants no additional rights beyond this license or a
-separate permission from the Creator.
+5. Distribution requires permission
 
-5. Separate permissions and source disclosure
+You may not Distribute the Work without the Creator's prior written permission,
+except to the extent a separate permission expressly allows it. This restriction
+applies to modified and unmodified copies and includes modpacks, installers,
+mirrors, forks, compilations, and bundles containing the Work.
 
-The Creator may give written permission for particular modifications, uses,
-or distributions, including a public permission notice. Follow its scope and
-conditions; permission for one action does not imply permission for others.
-When redistribution is authorized, retain the Work's copyright and license
-notices unless the Creator authorizes otherwise. No right to sublicense the
-Creator's material is granted unless separately authorized.
+You may link to a copy that the Creator has authorized for download. Public
+source availability, access through a public repository, or the technical
+ability to fork a repository grants no additional license rights.
 
-This license does not require the Creator or recipients to publish, upload,
-or provide source code. It does not give the Creator ownership of independent
-work merely because that work interacts with the Work. For material covered
-by someone else's rights, obtain permission from the appropriate holder.
+6. Separate permissions and independent works
 
-6. Other rights
+The Creator may publish or directly provide a separate written permission for
+particular modifications, uses, or distributions. Electronic permission and a
+public permission notice count as written permission. Follow its stated scope
+and conditions; permission for one action does not imply permission for others.
 
-Third-party components retain their own licenses and notices. This license
-does not override separately granted rights or obligations for those components.
-It does not authorize false claims of authorship, approval, or endorsement.
-Rights not expressly granted are reserved. Nothing here limits rights that
-applicable law does not permit a license to restrict.
+When Distribution is separately authorized, you must retain the applicable
+copyright, JDL-1, and separate-permission notices unless the Creator expressly
+allows their removal. No right to sublicense the Creator's material is granted
+unless the separate permission says so.
 
-7. Warranty and liability
+JDL-1 does not require any Creator or recipient to publish, upload, or provide
+source code. It does not give the Creator ownership of independently authored
+work merely because that work interacts with the Work. Rights in third-party
+material must be obtained from the appropriate rights holder.
 
-To the fullest extent permitted by applicable law, the Work is provided
-"AS IS", without warranties of any kind, express or implied, including
-merchantability, fitness for a particular purpose, and noninfringement.
-The Creator and contributors are not liable for claims, damages, or other
-liability arising from the Work or its use, whether in contract, tort,
-or otherwise, to the fullest extent permitted by applicable law.
+7. Reserved rights and termination
 
-8. Reusing this license text
+Rights not expressly granted are reserved. JDL-1 grants no trademark rights
+except the limited use reasonably necessary to identify the Work, the Creator,
+and the applicable license accurately. It does not authorize false claims of
+authorship, approval, sponsorship, or endorsement.
 
-Anyone may copy and distribute this license text verbatim to apply it to
-their own work or accompany authorized copies, without separate permission
-or a fee. Identify that work and its copyright holder in an accompanying
-notice. This permission covers the license document, not another creator's
-Work. Altered license terms must use a different name and identifier so they
-are not presented as JDL-1.
+Your rights under JDL-1 terminate automatically if you materially violate its
+terms. If the violation is curable, those rights are reinstated provisionally
+when you stop the violation and permanently if the Creator does not notify you
+of the violation within 30 days after you cured it. This does not limit the
+Creator's remedies for the period of violation or for an incurable violation.
+
+Nothing in JDL-1 limits rights that applicable law does not permit a license to
+restrict. Third-party components retain their own licenses and notices, which
+JDL-1 does not replace or override.
+
+8. Warranty and liability
+
+To the fullest extent permitted by applicable law, the Work is provided "AS
+IS", without warranties of any kind, express or implied, including warranties
+of merchantability, fitness for a particular purpose, title, and
+noninfringement. To the fullest extent permitted by applicable law, the Creator
+and contributors are not liable for claims, damages, or other liability arising
+from the Work or its use, whether in contract, tort, or otherwise.
+
+9. Reusing the license text
+
+Anyone may copy and distribute this license text verbatim to apply JDL-1 to
+their own work or to accompany an authorized copy, without separate permission
+or a fee. Identify that work and its Creator in an accompanying notice. This
+permission covers the JDL-1 text itself, not another Creator's Work.
+
+Altered terms must use a different license name and identifier and must not be
+presented as JDL-1. Formatting changes that do not alter the words or meaning
+do not create a different license.
