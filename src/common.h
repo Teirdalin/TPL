@@ -29,6 +29,7 @@ std::wstring modulePath(HMODULE module);
 std::string sha256(const std::wstring& path);
 std::string sha256Bytes(const std::string& bytes);
 void setLogRoot(const std::wstring& root);
+void beginLogSession();
 void log(const char* message);
 void log(const std::string& message);
 bool patchImport(HMODULE module, const char* symbol, void* replacement, void** original);

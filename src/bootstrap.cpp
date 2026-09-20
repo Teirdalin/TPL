@@ -23,7 +23,7 @@ extern "C" __declspec(dllexport) void dllStartPlugin() {
         // RE_Kenshi may execute a compatibility binary in a child folder while keeping the game cwd.
         wchar_t cwd[32768]; GetCurrentDirectoryW(32768,cwd); std::wstring game=cwd;
         if(!tpl::exists(tpl::join(game,L"Plugins_x64.cfg"))) game=tpl::parent(tpl::modulePath(GetModuleHandleW(0)));
-        home=tpl::join(game,L"TPL"); tpl::setLogRoot(game);
+        home=tpl::join(game,L"TPL"); tpl::setLogRoot(game); tpl::beginLogSession();
         std::string version=tpl::trim(tpl::readFile(tpl::join(home,L"current.txt"),128));
         std::wstring queued=tpl::join(home,L"pending.txt"), attempt=tpl::join(home,L"attempt.txt");
         if(tpl::exists(queued)) {

@@ -7,7 +7,7 @@ set "INSTALLER_DIR=%~dp0TPL Installer Files"
 if /I "%~1"=="/S" goto reinstall
 if /I "%~1"=="/UNINSTALL" goto uninstall
 
-findstr /R /I /C:"^[ ]*Plugin[ ]*=[ ]*TPL[ ]*$" "%GAME_DIR%Plugins_x64.cfg" >nul 2>nul
+findstr /R /I /C:"^[ ]*Plugin[ ]*=[ ]*TPL[ ]*$" "%GAME_DIR%\Plugins_x64.cfg" >nul 2>nul
 if errorlevel 1 goto reinstall
 
 echo Teirdalin's Plugin Loader is already installed.

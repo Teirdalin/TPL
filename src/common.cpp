@@ -116,6 +116,18 @@ std::string sha256(const std::wstring& path) {
     return out;
 }
 void setLogRoot(const std::wstring& root) { logPath=join(root,L"TPL.log"); }
+void beginLogSession() {
+    if(logPath.empty()) return;
+    bool hadLog=exists(logPath), preserved=true;
+    if(hadLog) {
+        std::wstring previous=join(parent(logPath),L"TPL.previous.log");
+        preserved=MoveFileExW(logPath.c_str(),previous.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;
+        if(!preserved) preserved=CopyFileW(logPath.c_str(),previous.c_str(),FALSE)!=FALSE;
+    }
+    HANDLE h=CreateFileW(logPath.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,0,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,0);
+    if(h!=INVALID_HANDLE_VALUE) CloseHandle(h);
+    if(hadLog&&!preserved) log("Previous TPL.log could not be preserved");
+}
 std::string sha256Bytes(const std::string& bytes) {
     HCRYPTPROV provider=0; HCRYPTHASH hash=0;
     if(!CryptAcquireContextW(&provider,0,0,PROV_RSA_AES,CRYPT_VERIFYCONTEXT)) throw std::runtime_error("SHA256 unavailable");
