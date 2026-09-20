@@ -40,7 +40,9 @@ try {
     $zipPath = Join-Path $staging 'package.zip'
     Invoke-WebRequest -UseBasicParsing -Uri $archive[0].browser_download_url -Headers $headers -OutFile $zipPath -TimeoutSec 120
     $hashResponse = Invoke-WebRequest -UseBasicParsing -Uri $checksum[0].browser_download_url -Headers $headers -TimeoutSec 30
-    $expected = ([string]$hashResponse.Content).Trim().Split(' ')[0]
+    # GitHub downloads can be octet-stream, which Windows PowerShell returns as bytes.
+    $hashText = if ($hashResponse.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($hashResponse.Content) } else { [string]$hashResponse.Content }
+    $expected = $hashText.Trim().Split(' ')[0]
     if ($expected -notmatch '^[0-9a-fA-F]{64}$' -or (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash -ne $expected) { throw 'Update checksum mismatch.' }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $package = [IO.Compression.ZipFile]::OpenRead($zipPath)
