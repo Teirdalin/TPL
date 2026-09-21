@@ -6,5 +6,7 @@ void frame(float dt);
 const TPLLib_API* getAPI(uint32_t version);
 #ifdef TPLLIB_TESTING
 void testFailNextHookSnapshot();
+struct ForeignHookProfile;
+void testUseForeignProfile(const ForeignHookProfile* profile);
 #endif
 }

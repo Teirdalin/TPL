@@ -40,6 +40,6 @@ extern "C" __declspec(dllexport) int TPL_RuntimeStart(const wchar_t* game,const 
         }
         else if(re) tpl::log("Unsupported RE_Kenshi binary; native toggle enforcement unavailable");
         if(!tpl::installUi(ready)) { tpl::log("Missing supported MyGUI initialization import"); return 1; }
-        tpl::log("TPL 0.1.1 initialized"); return 0;
+        tpl::log("TPL 0.1.2 initialized"); return 0;
     } catch(const std::exception& e) { tpl::log(std::string("TPL initialization failed: ")+e.what()); return 1; }
 }

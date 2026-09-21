@@ -9,6 +9,11 @@
 
 namespace tpl {
 Catalog catalog;
+Catalog::Catalog() : rePresent(false),reBridge(false),scanRoot(0),scanHandle(INVALID_HANDLE_VALUE),
+    cacheHits(0),cacheMisses(0),scanComplete(true),startupIndex(0),startupPrepared(false),startupComplete(false),legacySuppressed(false) {
+    ZeroMemory(&scanData,sizeof(scanData));
+}
+Catalog::~Catalog() { closeScanner(); }
 static std::wstring key(const std::wstring& path) { return lower(fullPath(path)); }
 static std::string jsonText(const rapidjson::Value& v,const char* field,const std::string& fallback="") {
     return v.HasMember(field)&&v[field].IsString() ? v[field].GetString() : fallback;
@@ -25,7 +30,10 @@ static void configFiles(const std::wstring& base,const std::wstring& dir,int dep
     for(size_t i=0;i<dirs.size() && out.size()<128;++i) configFiles(base,dirs[i],depth-1,out);
 }
 void Catalog::initialize(const std::wstring& root) {
+    closeScanner();
     game=fullPath(root); home=join(game,L"TPL"); entries.clear(); active.clear(); disabled.clear(); launchOrder.clear();
+    scanRoots.clear(); cachedFolders.clear(); nextCache.clear(); cacheHits=cacheMisses=0; scanRoot=0; scanComplete=false;
+    startupQueue.clear(); startupIndex=0; startupPrepared=false; startupComplete=false; legacySuppressed=false;
     std::wstring cfg=join(game,L"data\\mods.cfg");
     cfgSnapshot=exists(cfg)?readFile(cfg):"";
     std::vector<std::string> enabled=lines(cfgSnapshot);
@@ -45,17 +53,19 @@ void Catalog::initialize(const std::wstring& root) {
         }
     }
     startupDisabled=disabled;
-    std::vector<std::wstring> roots;
-    roots.push_back(join(game,L"mods"));
-    roots.push_back(join(parent(parent(game)),L"workshop\\content\\233860"));
-    roots.push_back(join(home,L"plugins"));
-    for(size_t r=0;r<roots.size();++r) {
-        std::vector<std::wstring> dirs=list(roots[r],L"*",true);
-        for(size_t i=0;i<dirs.size();++i) {
-            try { scanFolder(dirs[i],r==1?"Workshop":"Local"); }
-            catch(const std::exception& e) { log("Catalog: "+narrow(dirs[i])+": "+e.what()); }
-        }
-    }
+    loadCache();
+    ScanRoot local={join(game,L"mods"),"Local"}; scanRoots.push_back(local);
+    ScanRoot workshop={join(parent(parent(game)),L"workshop\\content\\233860"),"Workshop"}; scanRoots.push_back(workshop);
+    ScanRoot plugins={join(home,L"plugins"),"Local"}; scanRoots.push_back(plugins);
+    rePresent=GetModuleHandleW(L"RE_Kenshi.dll")!=0;
+}
+void Catalog::closeScanner() {
+    if(scanHandle!=INVALID_HANDLE_VALUE) FindClose(scanHandle);
+    scanHandle=INVALID_HANDLE_VALUE;
+}
+void Catalog::finishDiscovery() {
+    if(scanComplete) return;
+    closeScanner();
     std::set<std::wstring> found;
     for(size_t i=0;i<entries.size();++i) if(!entries[i].plugin) found.insert(lower(entries[i].modFile));
     for(std::set<std::wstring>::const_iterator i=active.begin();i!=active.end();++i) {
@@ -65,7 +75,120 @@ void Catalog::initialize(const std::wstring& root) {
     }
     updateDesired();
     for(size_t i=0;i<entries.size();++i) entries[i].startEnabled=entries[i].desiredEnabled;
-    rePresent=GetModuleHandleW(L"RE_Kenshi.dll")!=0;
+    scanComplete=true;
+    try { saveCache(); }
+    catch(const std::exception& e) { log(std::string("Catalog cache: ")+e.what()); }
+    std::ostringstream message; message<<"Catalog cache: "<<cacheHits<<" folder(s) reused, "<<cacheMisses<<" rescanned"; log(message.str());
+}
+static void appendMetadata(std::ostringstream& value,const std::wstring& path) {
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if(!GetFileAttributesExW(path.c_str(),GetFileExInfoStandard,&data)) { value<<"-;"; return; }
+    value<<std::hex<<data.dwFileAttributes<<":"<<data.ftLastWriteTime.dwHighDateTime<<":"
+        <<data.ftLastWriteTime.dwLowDateTime<<":"<<data.nFileSizeHigh<<":"<<data.nFileSizeLow<<";";
+}
+std::string Catalog::folderSignature(const std::wstring& root) const {
+    std::ostringstream value;
+    appendMetadata(value,root); appendMetadata(value,join(root,L"TPL.json")); appendMetadata(value,join(root,L"RE_Kenshi.json"));
+    return value.str();
+}
+void Catalog::loadCache() {
+    std::wstring path=join(home,L"catalog-cache.json"); if(!exists(path)) return;
+    try {
+        rapidjson::Document d; parse(readFile(path,4*1024*1024),d);
+        if(!d.HasMember("schema") || !d["schema"].IsInt() || d["schema"].GetInt()!=1 ||
+           !d.HasMember("folders") || !d["folders"].IsArray()) return;
+        for(rapidjson::SizeType i=0;i<d["folders"].Size();++i) {
+            const rapidjson::Value& folder=d["folders"][i];
+            if(!folder.IsObject() || !folder.HasMember("path") || !folder["path"].IsString() ||
+               !folder.HasMember("signature") || !folder["signature"].IsString() ||
+               !folder.HasMember("entries") || !folder["entries"].IsArray()) continue;
+            std::wstring root=fullPath(widen(folder["path"].GetString())); CachedFolder cached; cached.signature=folder["signature"].GetString();
+            std::wstring owner;
+            for(rapidjson::SizeType n=0;n<folder["entries"].Size();++n) {
+                const rapidjson::Value& row=folder["entries"][n];
+                if(!row.IsObject() || !row.HasMember("plugin") || !row["plugin"].IsBool() ||
+                   !row.HasMember("path") || !row["path"].IsString() || !row.HasMember("name") || !row["name"].IsString() ||
+                   !row.HasMember("provider") || !row["provider"].IsString()) { cached.entries.clear(); break; }
+                Entry e; e.plugin=row["plugin"].GetBool(); e.root=root; e.path=fullPath(widen(row["path"].GetString()));
+                e.name=row["name"].GetString(); e.provider=row["provider"].GetString();
+                bool provider=e.provider=="TPL" || e.provider=="RE_Kenshi" || e.provider=="RE_Kenshi preload" ||
+                    e.provider=="FCS / Local" || e.provider=="FCS / Workshop";
+                std::wstring extension=lower(e.path);
+                bool kind=e.plugin ? extension.size()>4 && extension.substr(extension.size()-4)==L".dll"
+                    : extension.size()>4 && extension.substr(extension.size()-4)==L".mod";
+                if(!provider || !kind || !contained(root,e.path)) { cached.entries.clear(); break; }
+                e.id=key(e.path);
+                if(!e.plugin) { e.modFile=filename(e.path); owner=e.id; }
+                cached.entries.push_back(e);
+            }
+            for(size_t n=0;n<cached.entries.size();++n) if(cached.entries[n].plugin) cached.entries[n].owner=owner;
+            cachedFolders[key(root)]=cached;
+        }
+    } catch(const std::exception& e) { cachedFolders.clear(); log(std::string("Catalog cache ignored: ")+e.what()); }
+}
+void Catalog::saveCache() const {
+    rapidjson::StringBuffer buffer; rapidjson::Writer<rapidjson::StringBuffer> w(buffer);
+    w.StartObject(); w.Key("schema"); w.Int(1); w.Key("folders"); w.StartArray();
+    for(std::map<std::wstring,CachedFolder>::const_iterator i=nextCache.begin();i!=nextCache.end();++i) {
+        w.StartObject(); std::string root=narrow(i->first); w.Key("path"); w.String(root.c_str());
+        w.Key("signature"); w.String(i->second.signature.c_str()); w.Key("entries"); w.StartArray();
+        for(size_t n=0;n<i->second.entries.size();++n) {
+            const Entry& e=i->second.entries[n]; std::string path=narrow(e.path);
+            w.StartObject(); w.Key("plugin"); w.Bool(e.plugin); w.Key("path"); w.String(path.c_str());
+            w.Key("name"); w.String(e.name.c_str()); w.Key("provider"); w.String(e.provider.c_str()); w.EndObject();
+        }
+        w.EndArray(); w.EndObject();
+    }
+    w.EndArray(); w.EndObject(); writeFile(join(home,L"catalog-cache.json"),buffer.GetString(),false);
+}
+bool Catalog::scanStep(size_t budget) {
+    if(scanComplete || budget==0) return false;
+    bool changed=false;
+    size_t examined=0;
+    while(examined<budget && !scanComplete) {
+        if(scanHandle==INVALID_HANDLE_VALUE) {
+            while(scanRoot<scanRoots.size() && scanHandle==INVALID_HANDLE_VALUE) {
+                std::wstring pattern=join(scanRoots[scanRoot].path,L"*");
+                scanHandle=FindFirstFileW(pattern.c_str(),&scanData);
+                if(scanHandle==INVALID_HANDLE_VALUE) ++scanRoot;
+            }
+            if(scanRoot>=scanRoots.size()) { finishDiscovery(); break; }
+        }
+        size_t currentRoot=scanRoot;
+        WIN32_FIND_DATAW item=scanData;
+        if(!FindNextFileW(scanHandle,&scanData)) {
+            closeScanner(); ++scanRoot;
+        }
+        ++examined;
+        if(!(item.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) || wcscmp(item.cFileName,L".")==0 || wcscmp(item.cFileName,L"..")==0) continue;
+        std::wstring folder=join(scanRoots[currentRoot].path,item.cFileName);
+        const std::string origin=scanRoots[currentRoot].origin;
+        size_t before=entries.size();
+        std::wstring folderKey=key(folder); std::string signature=folderSignature(folder);
+        std::map<std::wstring,CachedFolder>::const_iterator cached=cachedFolders.find(folderKey);
+        if(cached!=cachedFolders.end() && cached->second.signature==signature) {
+            entries.insert(entries.end(),cached->second.entries.begin(),cached->second.entries.end());
+            nextCache[folderKey]=cached->second; ++cacheHits;
+        } else {
+            try { scanFolder(folder,origin); }
+            catch(const std::exception& e) { log("Catalog: "+narrow(folder)+": "+e.what()); }
+            CachedFolder fresh; fresh.signature=signature;
+            fresh.entries.insert(fresh.entries.end(),entries.begin()+before,entries.end());
+            nextCache[folderKey]=fresh; ++cacheMisses;
+        }
+        if(entries.size()!=before) {
+            for(size_t i=before;i<entries.size();++i) {
+                Entry& e=entries[i]; e.module=0; e.tick=0; e.loaded=e.running=e.attempted=false;
+                e.missing=false; e.startEnabled=e.plugin?false:active.count(lower(e.modFile))!=0;
+                e.status=e.plugin?"Not loaded":(e.startEnabled?"Enabled at launch":"Disabled at launch");
+            }
+            updateDesired();
+            for(size_t i=before;i<entries.size();++i) entries[i].startEnabled=entries[i].desiredEnabled;
+            changed=true;
+        }
+    }
+    if(!scanComplete && scanRoot>=scanRoots.size() && scanHandle==INVALID_HANDLE_VALUE) finishDiscovery();
+    return changed;
 }
 void Catalog::scanFolder(const std::wstring& root,const std::string& origin) {
     std::vector<std::wstring> mods=list(root,L"*.mod",false);
@@ -146,7 +269,14 @@ bool Catalog::blocked(const std::wstring& path) const {
         const Entry& e=entries[i];
         if(e.plugin && e.id==id) return !e.startEnabled || e.provider=="TPL";
     }
-    return startupDisabled.count(id)!=0;
+    if(startupDisabled.count(id)!=0) return true;
+    // Parent-mod disables must work even while the catalog is still being
+    // discovered incrementally and RE_Kenshi is already requesting DLLs.
+    for(std::set<std::wstring>::const_iterator i=startupDisabled.begin();i!=startupDisabled.end();++i) {
+        std::wstring disabledId=lower(*i);
+        if(disabledId.size()>4 && disabledId.substr(disabledId.size()-4)==L".mod" && parent(disabledId)==parent(id)) return true;
+    }
+    return false;
 }
 void Catalog::saveState() {
     rapidjson::StringBuffer buffer; rapidjson::Writer<rapidjson::StringBuffer> w(buffer);
@@ -212,11 +342,11 @@ void Catalog::observeModules() {
     CloseHandle(snap);
 }
 void Catalog::startPlugins() {
-    if(!tpllib::initialize(&log)) { log("TPLLib initialization failed; plugin startup skipped"); return; }
-    startOrderedPlugins(false);
-    startLegacyPlugins();
+    while(!discoveryComplete()) scanStep(256);
+    if(pluginStartupComplete()) startPluginStep();
+    while(!pluginStartupComplete()) startPluginStep();
 }
-void Catalog::startOrderedPlugins(bool legacy) {
+void Catalog::queueOrderedPlugins(bool legacy) {
     const char* provider=legacy?"RE_Kenshi":"TPL";
     std::vector<std::wstring> owners;
     for(size_t n=0;n<launchOrder.size();++n) {
@@ -233,20 +363,54 @@ void Catalog::startOrderedPlugins(bool legacy) {
     owners.push_back(L"");
     for(size_t n=0;n<owners.size();++n) for(size_t i=0;i<entries.size();++i) {
         Entry& e=entries[i];
-        if(legacy && GetModuleHandleW(L"RE_Kenshi.dll")) { rePresent=true; return; }
-        if(e.provider==provider && e.owner==owners[n] && e.startEnabled && !e.missing && !e.attempted) startEntry(e,legacy);
+        if(e.provider==provider && e.owner==owners[n] && e.startEnabled && !e.missing && !e.attempted)
+            startupQueue.push_back(std::make_pair(i,legacy));
     }
 }
-void Catalog::startLegacyPlugins() {
+void Catalog::preparePluginStartup() {
+    if(startupPrepared) return;
+    startupPrepared=true;
+    if(!tpllib::initialize(&log)) { log("TPLLib initialization failed; plugin startup skipped"); startupComplete=true; return; }
+    queueOrderedPlugins(false);
     rePresent=rePresent || GetModuleHandleW(L"RE_Kenshi.dll")!=0;
-    if(rePresent) return;
-    startOrderedPlugins(true);
-    for(size_t i=0;i<entries.size();++i) {
-        Entry& e=entries[i];
-        if(e.provider=="RE_Kenshi preload" && e.startEnabled && !e.attempted) {
-            e.attempted=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
+    if(!rePresent) {
+        queueOrderedPlugins(true);
+        for(size_t i=0;i<entries.size();++i) {
+            Entry& e=entries[i];
+            if(e.provider=="RE_Kenshi preload" && e.startEnabled && !e.attempted) {
+                e.attempted=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
+            }
+        }
+    } else legacySuppressed=true;
+    startupComplete=startupQueue.empty();
+}
+bool Catalog::startPluginStep() {
+    if(!scanComplete) return false;
+    preparePluginStartup();
+    if(startupComplete && legacySuppressed) {
+        if(GetModuleHandleW(L"RE_Kenshi.dll")) { rePresent=true; return false; }
+        if(!rePresent) {
+            legacySuppressed=false; startupQueue.clear(); startupIndex=0;
+            queueOrderedPlugins(true);
+            for(size_t i=0;i<entries.size();++i) {
+                Entry& e=entries[i];
+                if(e.provider=="RE_Kenshi preload" && e.startEnabled && !e.attempted) {
+                    e.attempted=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
+                }
+            }
+            startupComplete=startupQueue.empty();
         }
     }
+    if(startupComplete) return false;
+    std::pair<size_t,bool> next=startupQueue[startupIndex++];
+    if(next.first<entries.size()) {
+        if(next.second && GetModuleHandleW(L"RE_Kenshi.dll")) {
+            rePresent=true;
+            while(startupIndex<startupQueue.size() && startupQueue[startupIndex].second) ++startupIndex;
+        } else startEntry(entries[next.first],next.second);
+    }
+    if(startupIndex>=startupQueue.size()) startupComplete=true;
+    return true;
 }
 void Catalog::startEntry(Entry& e,bool legacy) {
     static TPL_Host host={sizeof(TPL_Host),TPL_ABI_VERSION,0,&log,&tpllib::getAPI}; host.game_directory=game.c_str();

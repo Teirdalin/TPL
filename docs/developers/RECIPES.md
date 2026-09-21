@@ -121,9 +121,11 @@ This is an advanced process, not a generic character-hook snippet:
 6. In a detour, normally call its continuation once. Catch your own exceptions;
    do not call the hooked address recursively or unload callback code.
 
-TPL chains do not merge with RE_Kenshi's patches. A conflict is a reason to
-decline the feature, not force another writer out. A valid address alone does
-not prove that directly calling it is safe.
+TPL chains do not merge with unknown patches. For a reviewed MinHook-style
+foreign chain, check `TPLLIB_HAS_FOREIGN_HOOK_CHAINS` and use
+`hook_create_shared_foreign` with the exact module hash, detour RVA and detour
+fingerprint. A mismatch is a reason to decline the feature, never to overwrite
+the other writer. A valid address alone does not prove that calling it is safe.
 
 ## Release checklist
 

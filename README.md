@@ -13,7 +13,7 @@ Download either the installer or the ZIP from
 
 **Option 1: installer**
 
-Download and run `TPL-0.1.1-Installer.exe`. It finds your Kenshi folder, copies
+Download and run `TPL-0.1.2-Installer.exe`. It finds your Kenshi folder, copies
 the loader files, and updates Kenshi's plugin configuration for you. If TPL is
 already installed, it offers Reinstall and Uninstall.
 
@@ -76,8 +76,7 @@ Resolve all hook targets before modifying their entries.
 The installer enables automatic checks; users can turn them off in Mods. Checks
 use the latest non-prerelease `vX.Y.Z` release on `Teirdalin/TPL`.
 `TPL-runtime.zip` and its `.sha256` file stage newer runtimes for the next
-launch. The bootstrap is updated manually. Existing 0.1.0 test installations
-are already at this version; automatic upgrades start with a higher version.
+launch. The bootstrap is updated manually when a release requires it.
 
 ## Source and license
 

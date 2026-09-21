@@ -20,6 +20,7 @@ extern "C" {
 #define TPLLIB_CAP_SERVICES 16u
 #define TPLLIB_CAP_LOGGING 32u
 #define TPLLIB_CAP_SHARED_HOOKS 64u
+#define TPLLIB_CAP_FOREIGN_HOOK_CHAINS 128u
 /* Reserved capabilities: NOT provided by the foundation implementation. */
 #define TPLLIB_CAP_GAME_OBJECTS 0x10000u
 #define TPLLIB_CAP_KENSHILIB_ABI 0x20000u
@@ -62,6 +63,15 @@ typedef struct TPLLib_HookState {
     uint32_t chain_enabled;
     uint32_t reserved;
 } TPLLib_HookState;
+typedef struct TPLLib_ForeignHook {
+    uint32_t size;
+    uint32_t reserved;
+    const wchar_t* module_name;
+    const char* module_sha256;
+    uint32_t detour_rva;
+    uint32_t reserved2;
+    uint8_t detour_expected32[TPLLIB_HOOK_BYTES];
+} TPLLib_ForeignHook;
 typedef void (*TPLLib_Job)(void* user);
 typedef void (*TPLLib_Frame)(void* user, float dt);
 
@@ -106,12 +116,22 @@ typedef struct TPLLib_API {
     TPLLib_Status (*hook_create_shared)(TPLLib_Token owner, void* target,
         const uint8_t* expected32, void* detour, void** continuation, TPLLib_Token* hook);
     TPLLib_Status (*hook_state)(TPLLib_Token owner, TPLLib_Token hook, TPLLib_HookState* state);
+    /* Wrap one explicitly profiled foreign MinHook-style detour. The native
+       target, relay/trampoline, foreign module hash/RVA and detour bytes must
+       all verify. TPL never removes or assumes ownership of the foreign hook. */
+    TPLLib_Status (*hook_create_shared_foreign)(TPLLib_Token owner, void* target,
+        const uint8_t* expected32, const TPLLib_ForeignHook* foreign_hook,
+        void* detour, void** continuation, TPLLib_Token* hook);
 } TPLLib_API;
 
 #define TPLLIB_HAS_SHARED_HOOKS(api) ((api) && \
     (api)->size >= offsetof(TPLLib_API, hook_state) + sizeof((api)->hook_state) && \
     ((api)->capabilities & TPLLIB_CAP_SHARED_HOOKS) && \
     (api)->hook_create_shared && (api)->hook_state)
+#define TPLLIB_HAS_FOREIGN_HOOK_CHAINS(api) ((api) && \
+    (api)->size >= offsetof(TPLLib_API, hook_create_shared_foreign) + sizeof((api)->hook_create_shared_foreign) && \
+    ((api)->capabilities & TPLLIB_CAP_FOREIGN_HOOK_CHAINS) && \
+    (api)->hook_create_shared_foreign)
 typedef const TPLLib_API* (*TPLLib_GetAPIFn)(uint32_t abi_version);
 
 #pragma pack(pop)

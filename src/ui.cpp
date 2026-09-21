@@ -10,6 +10,7 @@
 #include <MyGUI_MultiListBox.h>
 #include <MyGUI_ComboBox.h>
 #include <MyGUI_InputManager.h>
+#include <MyGUI_ResourceTrueTypeFont.h>
 
 namespace tpl {
 static MyGUI::Gui* liveGui=0;
@@ -20,6 +21,7 @@ static MyGUI::Widget* panel=0;
 static MyGUI::MultiListBox* table=0;
 static MyGUI::EditBox* search=0;
 static MyGUI::TextBox* status=0;
+static MyGUI::TextBox* versionStatus=0;
 static MyGUI::Button* enableButton=0;
 static MyGUI::Button* configButton=0;
 static MyGUI::Widget* editorPanel=0;
@@ -31,10 +33,18 @@ static ConfigDocument document;
 static size_t selected=MyGUI::ITEM_NONE, openFile=MyGUI::ITEM_NONE;
 static bool rebuilding=false, choosing=false;
 static DWORD lastStatusPoll=0;
+static DWORD lastCatalogRefresh=0;
 static bool updatePending=false;
+static bool catalogObserved=false, catalogDirty=false;
 static bool (*originalKeyPress)(MyGUI::InputManager*,MyGUI::KeyCode,MyGUI::Char)=0;
 static bool (*originalKeyRelease)(MyGUI::InputManager*,MyGUI::KeyCode)=0;
 static EscapeInput escapeInput;
+static UiFrameRequests frameRequests;
+static void (*originalFontSize)(MyGUI::ResourceTrueTypeFont*,float)=0;
+static void fontSize(MyGUI::ResourceTrueTypeFont* font,float size) {
+    frameRequests.fontResized();
+    originalFontSize(font,size);
+}
 static std::string display(const std::string& s) {
     std::string out; for(size_t i=0;i<s.size();++i) { out+=s[i]; if(s[i]=='#') out+='#'; } return out;
 }
@@ -75,9 +85,9 @@ static void destroyPanels() {
         MyGUI::InputManager::getInstance().removeWidgetModal(mods);
         liveGui->destroyWidget(mods);
     }
-    panel=0; editorPanel=0; table=0; search=0; status=0; editor=0;
+    panel=0; editorPanel=0; table=0; search=0; status=0; versionStatus=0; editor=0;
     fileChoice=0; editorStatus=0; enableButton=0; configButton=0;
-    selected=MyGUI::ITEM_NONE; openFile=MyGUI::ITEM_NONE; updatePending=false;
+    selected=MyGUI::ITEM_NONE; openFile=MyGUI::ITEM_NONE;
     configPaths.clear(); escapeInput.takeClose();
 }
 static MyGUI::TextBox* label(MyGUI::Widget* root,int x,int y,int w,int h,const std::string& text) {
@@ -89,6 +99,16 @@ static MyGUI::Button* button(MyGUI::Widget* root,int x,int y,int w,int h,const s
     b->setCaption(text); b->eventMouseButtonClick+=MyGUI::newDelegate(fn); return b;
 }
 static void setStatus(const std::string& text) { if(status) status->setCaption(display(text)); }
+static std::string versionFile(const wchar_t* name,const char* fallback) {
+    std::wstring path=join(catalog.home,name);
+    return exists(path)?trim(readFile(path,128)):fallback;
+}
+static void showVersions(bool checking) {
+    if(!versionStatus) return;
+    std::string current=versionFile(L"current.txt","Unknown");
+    std::string latest=checking?"Checking...":versionFile(L"latest.txt","Unavailable");
+    versionStatus->setCaption(display("Current: "+current+"    Latest: "+latest));
+}
 static void selection(MyGUI::MultiListBox*,size_t index) {
     if(rebuilding) return;
     selected=MyGUI::ITEM_NONE;
@@ -179,7 +199,11 @@ static void closePanel(MyGUI::Widget*) {
     MyGUI::InputManager::getInstance().removeWidgetModal(panel); panel->setVisible(false);
 }
 static void checkUpdate(MyGUI::Widget*) {
-    try { runUpdater(true); updatePending=true; setStatus("Checking GitHub Releases. Updates apply on the next launch."); }
+    try {
+        showVersions(true);
+        if(!updatePending) { runUpdater(true); updatePending=true; }
+        setStatus("Checking GitHub Releases. Updates apply on the next launch.");
+    }
     catch(const std::exception& e) { setStatus(e.what()); }
 }
 static void automaticClicked(MyGUI::Widget* sender) {
@@ -187,14 +211,16 @@ static void automaticClicked(MyGUI::Widget* sender) {
     try { writeFile(join(catalog.home,L"automatic-updates.txt"),next?"on":"off"); b->setStateSelected(next); }
     catch(const std::exception& e) { setStatus(e.what()); }
 }
-static void openPanel(MyGUI::Widget* sender) {
+static void openPanel(MyGUI::Widget*) { frameRequests.openMods(); }
+static void openPanelNow(MyGUI::Widget* sender) {
     try {
         MyGUI::Widget* root=sender->getParent();
         if(!panel) {
             int w=std::min(1120,root->getWidth()-32), h=std::min(760,root->getHeight()-32);
             if(w<600||h<380) { log("Viewport too small for Mods menu"); return; }
             panel=liveGui->createWidget<MyGUI::Widget>("Kenshi_GenericWindowSkin",root->getAbsoluteLeft()+(root->getWidth()-w)/2,root->getAbsoluteTop()+(root->getHeight()-h)/2,w,h,MyGUI::Align::Center,"Window","TPL_ModPanel");
-            label(panel,16,12,w-32,30,"Mods");
+            label(panel,16,12,100,30,"Mods");
+            versionStatus=label(panel,120,12,w-136,30,"");
             search=panel->createWidget<MyGUI::EditBox>("Kenshi_EditBox",16,52,w-32,32,MyGUI::Align::HStretch);
             search->setMaxTextLength(160); search->eventEditTextChange+=MyGUI::newDelegate(queryChanged);
             table=panel->createWidget<MyGUI::MultiListBox>("Kenshi_MultiListBox",16,96,w-32,h-260,MyGUI::Align::Stretch);
@@ -215,14 +241,25 @@ static void openPanel(MyGUI::Widget* sender) {
             status=label(panel,16,h-66,w-150,50,""); status->setTextAlign(MyGUI::Align::Left|MyGUI::Align::Top);
             button(panel,w-116,h-52,100,32,"Close",closePanel);
         }
-        catalog.observeModules(); populate(); panel->setVisible(true);
+        populate(); panel->setVisible(true);
         MyGUI::InputManager::getInstance().addWidgetModal(panel);
-        if(exists(join(catalog.home,L"update-status.txt"))) setStatus(trim(readFile(join(catalog.home,L"update-status.txt"),4096)));
+        log("Mods panel opened");
+        showVersions(true);
+        checkUpdate(0);
     } catch(const std::exception& e) { log(std::string("Mods UI: ")+e.what()); destroyPanels(); }
 }
 static void frame(float dt) {
     if(uiFailed || !liveGui) return;
     try {
+        if(frameRequests.takeFontRefresh()) {
+            // Options can regenerate font textures without recreating our widgets.
+            // Their old render batches must be removed before the next GUI draw.
+            MyGUI::Widget* modsButton=liveWindow("TPL_ModsButton");
+            bool hadWidgets=modsButton || panel || editorPanel;
+            destroyPanels();
+            if(modsButton) liveGui->destroyWidget(modsButton);
+            if(hadWidgets) log("TPL UI rebuilt after native font resize");
+        }
         MyGUI::Widget* options=findNamed(liveGui->getEnumerator(),"OptionsButton");
         MyGUI::Widget* continueButton=findNamed(liveGui->getEnumerator(),"ContinueButton");
         if(options && continueButton && options->getParent()==continueButton->getParent()) {
@@ -256,19 +293,38 @@ static void frame(float dt) {
                     }
                 }
                 catch(...) { log("TPLLib UI service initialization failed; continuing without it"); }
-                catalog.startPlugins();
                 if(readyCallback) readyCallback();
                 std::wstring autoFile=join(catalog.home,L"automatic-updates.txt");
-                if(exists(autoFile)&&trim(readFile(autoFile))=="on") runUpdater(false);
+                if(exists(autoFile)&&trim(readFile(autoFile))=="on") { runUpdater(false); updatePending=true; }
             }
         } else if(panel || editorPanel) destroyPanels();
+        if(pluginsStarted) {
+            bool visible=panel && liveWindow("TPL_ModPanel")==panel && panel->getVisible();
+            if(catalog.scanStep(visible?2:1)) catalogDirty=true;
+            if(catalog.discoveryComplete() && !catalogObserved) {
+                catalog.observeModules(); catalogObserved=true; catalogDirty=true;
+            }
+            if(catalogObserved && catalog.startPluginStep()) catalogDirty=true;
+            if(visible && catalogDirty && GetTickCount()-lastCatalogRefresh>200) {
+                lastCatalogRefresh=GetTickCount(); populate(); catalogDirty=false;
+            }
+        }
+        if(frameRequests.takeOpenMods()) {
+            MyGUI::Widget* modsButton=liveWindow("TPL_ModsButton");
+            if(modsButton) openPanelNow(modsButton);
+        }
         // Close after input dispatch, never while MyGUI is traversing a key callback.
         EscapeInput::Target close=escapeInput.takeClose();
         if(close==EscapeInput::Config && editorPanel && liveWindow("TPL_Config")==editorPanel && editorPanel->getVisible()) closeEditor(0);
         else if(close==EscapeInput::Mods && panel && liveWindow("TPL_ModPanel")==panel && panel->getVisible()) closePanel(0);
         if(updatePending && panel && findNamed(liveGui->getEnumerator(),"TPL_ModPanel")==panel && panel->getVisible() && GetTickCount()-lastStatusPoll>1000) {
             lastStatusPoll=GetTickCount(); std::wstring path=join(catalog.home,L"update-status.txt");
-            if(exists(path)) { std::string message=trim(readFile(path,4096)); setStatus(message); if(message!="Checking for updates...") updatePending=false; }
+            if(exists(path)) {
+                std::string message=trim(readFile(path,4096)); setStatus(message);
+                bool checking=message=="Checking for updates...";
+                showVersions(checking);
+                if(!checking) updatePending=false;
+            }
         }
         catalog.tick(dt);
     } catch(const std::exception& e) { uiFailed=true; log(std::string("TPL UI disabled: ")+e.what()); }
@@ -282,6 +338,7 @@ static void guiInit(MyGUI::Gui* gui,const std::string& core) {
 bool installUi(void (*ready)()) {
     readyCallback=ready;
     HMODULE game=GetModuleHandleW(0);
+    if(!patchImport(game,"?setSize@ResourceTrueTypeFont@MyGUI@@QEAAXM@Z",(void*)&fontSize,(void**)&originalFontSize)) return false;
     if(!patchImport(game,"?injectKeyPress@InputManager@MyGUI@@QEAA_NUKeyCode@2@I@Z",(void*)&keyPress,(void**)&originalKeyPress)) return false;
     if(!patchImport(game,"?injectKeyRelease@InputManager@MyGUI@@QEAA_NUKeyCode@2@@Z",(void*)&keyRelease,(void**)&originalKeyRelease)) return false;
     return patchImport(GetModuleHandleW(0),"?initialise@Gui@MyGUI@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z",(void*)&guiInit,(void**)&originalInit);

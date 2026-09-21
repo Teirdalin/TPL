@@ -1,5 +1,19 @@
 #pragma once
 namespace tpl {
+// Rebuild stale font users before opening a window, outside input dispatch.
+struct UiFrameRequests {
+    bool fontsChanged, modsRequested;
+    UiFrameRequests() : fontsChanged(false), modsRequested(false) {}
+    void fontResized() { fontsChanged=true; }
+    void openMods() { modsRequested=true; }
+    bool takeFontRefresh() {
+        bool result=fontsChanged; fontsChanged=false; return result;
+    }
+    bool takeOpenMods() {
+        if(fontsChanged) return false;
+        bool result=modsRequested; modsRequested=false; return result;
+    }
+};
 // Consume a complete Escape gesture, even after its window closes.
 struct EscapeInput {
     enum Target { None, Mods, Config };

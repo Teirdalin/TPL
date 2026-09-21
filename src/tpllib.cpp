@@ -7,6 +7,7 @@
 #include <float.h>
 #include <string.h>
 #include "tpllib_internal.h"
+#include "tpllib_foreign_profiles.h"
 #include <MinHook.h>
 
 namespace tpllib {
@@ -24,9 +25,17 @@ struct Hook {
     int group;
     unsigned char before[48], after[48];
 };
+struct ForeignGuard {
+    void* target;
+    void* block;
+    unsigned length;
+    unsigned char entry[32], bytes[44];
+};
 struct SharedTarget {
     Hook patch;
     void* trampoline;
+    unsigned char expected[TPLLIB_HOOK_BYTES];
+    ForeignGuard foreign;
 };
 Owner owners[OWNER_COUNT]={0};
 Job jobs[JOB_COUNT]={0};
@@ -44,6 +53,7 @@ uint64_t frameNumber=0, callbackFailures=0;
 bool dispatching=false, hooksInitialized=false;
 #ifdef TPLLIB_TESTING
 bool failHookSnapshot=false;
+const ForeignHookProfile* testForeignProfile=0;
 #endif
 void (*logger)(const char*)=0;
 struct Lock {
@@ -323,8 +333,98 @@ void* route(unsigned index) { return routes+index*8; }
 void routeTo(unsigned index,void* destination) {
     InterlockedExchangePointer(reinterpret_cast<PVOID volatile*>(routes+routePage+index*8),destination);
 }
+TPLLib_Status selectForeignProfile(void* target,const uint8_t* expected,const TPLLib_ForeignHook** out) {
+    *out=0;
+    const ForeignHookProfile* profiles=foreignHookProfiles;
+    unsigned count=sizeof(foreignHookProfiles)/sizeof(foreignHookProfiles[0]);
+#ifdef TPLLIB_TESTING
+    if(testForeignProfile) { profiles=testForeignProfile; count=1; }
+#endif
+    for(unsigned i=0;i<count;++i) {
+        const ForeignHookProfile& p=profiles[i];
+        HMODULE module=GetModuleHandleW(p.targetModule);
+        if(!module || uintptr_t(target)!=uintptr_t(module)+p.targetRva) continue;
+        if(memcmp(expected,p.expected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
+        Module verified;
+        TPLLib_Status s=checkBuild(verified,p.targetModule,p.targetSha256); if(s) return s;
+        *out=&p.foreign; return TPLLIB_OK;
+    }
+    return TPLLIB_CONFLICT;
+}
+TPLLib_Status foreignIdentity(const TPLLib_ForeignHook* profile,void** physical) {
+    if(!profile || profile->size<sizeof(*profile) || profile->reserved || profile->reserved2 ||
+       !profile->module_name || !profile->module_name[0] || !profile->module_sha256 ||
+       strlen(profile->module_sha256)!=64 || !physical) return TPLLIB_INVALID;
+    *physical=0;
+    Module module;
+    TPLLib_Status s=module.open(profile->module_name); if(s) return s;
+    char hash[65]; s=fingerprint(module.handle,hash); if(s) return s;
+    if(_stricmp(hash,profile->module_sha256)) return TPLLIB_VERSION_MISMATCH;
+    if(module.nt.OptionalHeader.SizeOfImage<TPLLIB_HOOK_BYTES ||
+       profile->detour_rva>module.nt.OptionalHeader.SizeOfImage-TPLLIB_HOOK_BYTES) return TPLLIB_INVALID;
+    *physical=reinterpret_cast<char*>(module.handle)+profile->detour_rva;
+    return executable(*physical)?TPLLIB_OK:TPLLIB_CONFLICT;
+}
+bool privateExecutableSpan(void* start,unsigned bytes) {
+    MEMORY_BASIC_INFORMATION m;
+    return VirtualQuery(start,&m,sizeof(m)) && m.State==MEM_COMMIT && m.Type==MEM_PRIVATE &&
+        executable(start) && uintptr_t(start)>=uintptr_t(m.BaseAddress) &&
+        uintptr_t(start)-uintptr_t(m.BaseAddress)<=m.RegionSize &&
+        bytes<=m.RegionSize-(uintptr_t(start)-uintptr_t(m.BaseAddress));
+}
+TPLLib_Status verifiedForeignTarget(void* target,const uint8_t* expected,
+    const TPLLib_ForeignHook* profile,void** physical,ForeignGuard& guard) {
+    void* foreign=0;
+    TPLLib_Status s=foreignIdentity(profile,&foreign); if(s) return s;
+    unsigned char foreignBytes[TPLLIB_HOOK_BYTES];
+    s=readMemory(foreign,foreignBytes,sizeof(foreignBytes)); if(s) return s;
+    if(memcmp(foreignBytes,profile->detour_expected32,sizeof(foreignBytes))) return TPLLIB_CONFLICT;
+
+    unsigned char entry[TPLLIB_HOOK_BYTES];
+    s=readMemory(target,entry,sizeof(entry)); if(s) return s;
+    if(entry[0]!=0xe9 || memcmp(entry+5,expected+5,TPLLIB_HOOK_BYTES-5)) return TPLLIB_CONFLICT;
+    int32_t displacement=0; memcpy(&displacement,entry+1,sizeof(displacement));
+    unsigned char* relay=reinterpret_cast<unsigned char*>(reinterpret_cast<uintptr_t>(target)+5+static_cast<intptr_t>(displacement));
+    MEMORY_BASIC_INFORMATION memory;
+    if(!VirtualQuery(relay,&memory,sizeof(memory)) || memory.State!=MEM_COMMIT || memory.Type!=MEM_PRIVATE || !executable(relay))
+        return TPLLIB_CONFLICT;
+    unsigned char relayBytes[14]; s=readMemory(relay,relayBytes,sizeof(relayBytes)); if(s) return s;
+    uint32_t indirect=1; memcpy(&indirect,relayBytes+2,sizeof(indirect));
+    void* destination=0; memcpy(&destination,relayBytes+6,sizeof(destination));
+    if(relayBytes[0]!=0xff || relayBytes[1]!=0x25 || indirect || destination!=foreign) return TPLLIB_CONFLICT;
+    // Upstream MinHook places the trampoline before its relay; the captured
+    // foreign backend places it immediately after. Accept only these layouts.
+    for(unsigned layout=0;layout<2;++layout) for(unsigned copied=5;copied<=16;++copied) {
+        unsigned length=copied+28;
+        if(uintptr_t(relay)<copied+14) continue;
+        unsigned char* block=layout?relay:relay-(copied+14);
+        if(!privateExecutableSpan(block,length)) continue;
+        unsigned char bytes[44];
+        if(readMemory(block,bytes,length)) continue;
+        unsigned char* trampoline=bytes+(layout?14:0);
+        if(memcmp(bytes+(layout?0:copied+14),relayBytes,14)) continue;
+        uint32_t jumpOffset=1; void* returnsTo=0;
+        if(trampoline[copied]!=0xff || trampoline[copied+1]!=0x25) continue;
+        memcpy(&jumpOffset,trampoline+copied+2,sizeof(jumpOffset));
+        memcpy(&returnsTo,trampoline+copied+6,sizeof(returnsTo));
+        if(jumpOffset || returnsTo!=reinterpret_cast<char*>(target)+copied || memcmp(trampoline,expected,copied)) continue;
+        guard.target=target; guard.block=block; guard.length=length;
+        memcpy(guard.entry,entry,sizeof(entry)); memcpy(guard.bytes,bytes,length);
+        *physical=foreign; return TPLLIB_OK;
+    }
+    return TPLLIB_CONFLICT;
+}
+TPLLib_Status verifyForeignGuard(const ForeignGuard& guard) {
+    if(!guard.target) return TPLLIB_OK;
+    unsigned char entry[32],bytes[44];
+    if(!privateExecutableSpan(guard.block,guard.length) ||
+       readMemory(guard.target,entry,sizeof(entry)) || readMemory(guard.block,bytes,guard.length) ||
+       memcmp(entry,guard.entry,sizeof(entry)) || memcmp(bytes,guard.bytes,guard.length)) return TPLLIB_CONFLICT;
+    return TPLLIB_OK;
+}
 TPLLib_Status verifyHook(Hook& hook);
-TPLLib_Status createHook(TPLLib_Token owner,void* target,const uint8_t* expected,void* detour,void** original,TPLLib_Token* out,bool shared) {
+TPLLib_Status createHook(TPLLib_Token owner,void* target,const uint8_t* expected,void* detour,void** original,
+    TPLLib_Token* out,bool shared,const TPLLib_ForeignHook* foreignProfile) {
     if(!original || !out) return TPLLIB_INVALID; *original=0; *out=0;
     TPLLib_Status s=mainOnly(); if(s) return s;
     if(!hasOwner(owner)) return TPLLIB_NOT_FOUND;
@@ -342,7 +442,13 @@ TPLLib_Status createHook(TPLLib_Token owner,void* target,const uint8_t* expected
     if(slot==HOOK_COUNT) return TPLLIB_LIMIT;
     if(group>=0) {
         SharedTarget& chain=sharedTargets[group];
-        if(memcmp(chain.patch.before+16,expected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
+        if(memcmp(chain.expected,expected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
+        s=verifyForeignGuard(chain.foreign); if(s) return s;
+        if(foreignProfile) {
+            void* physical=0; s=foreignIdentity(foreignProfile,&physical); if(s) return s;
+            if(!chain.foreign.target || physical!=chain.patch.target ||
+               memcmp(foreignProfile->detour_expected32,chain.patch.before+16,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
+        }
         s=verifyHook(chain.patch); if(s) return s;
         if(!pinAddress(detour)) return TPLLIB_INVALID;
         TPLLib_Token id;
@@ -355,10 +461,31 @@ TPLLib_Status createHook(TPLLib_Token owner,void* target,const uint8_t* expected
         hook.detour=detour; hook.group=group;
         *original=route(HOOK_COUNT+slot); *out=id; return TPLLIB_OK;
     }
-    unsigned char before[48]; s=readMemory(reinterpret_cast<void*>(start),before,sizeof(before)); if(s) return s;
-    if(memcmp(before+16,expected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
+    void* physicalTarget=target;
+    const uint8_t* physicalExpected=expected;
+    ForeignGuard foreignGuard={0};
+    if(shared && !foreignProfile) {
+        unsigned char live[TPLLIB_HOOK_BYTES];
+        s=readMemory(target,live,sizeof(live)); if(s) return s;
+        if(memcmp(live,expected,sizeof(live))) {
+            s=selectForeignProfile(target,expected,&foreignProfile); if(s) return s;
+        }
+    }
+    if(foreignProfile) {
+        if(!shared) return TPLLIB_INVALID;
+        s=verifiedForeignTarget(target,expected,foreignProfile,&physicalTarget,foreignGuard); if(s) return s;
+        physicalExpected=foreignProfile->detour_expected32;
+    }
+    if(uintptr_t(physicalTarget)<16 || physicalTarget==detour) return TPLLIB_INVALID;
+    uintptr_t physicalStart=uintptr_t(physicalTarget)-16;
+    for(unsigned i=0;i<HOOK_COUNT;++i) if(hooks[i].id) {
+        void* other=hooks[i].group<0?hooks[i].target:sharedTargets[hooks[i].group].patch.target;
+        if(physicalStart<uintptr_t(other)+32 && physicalStart+48>uintptr_t(other)-16) return TPLLIB_CONFLICT;
+    }
+    unsigned char before[48]; s=readMemory(reinterpret_cast<void*>(physicalStart),before,sizeof(before)); if(s) return s;
+    if(memcmp(before+16,physicalExpected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
     if(before[16]==0xe9 || before[16]==0xeb || (before[16]==0xff && (before[17]==0x25 || before[17]==0x15))) return TPLLIB_CONFLICT;
-    if(!pinAddress(target) || !pinAddress(detour)) return TPLLIB_INVALID;
+    if(!pinAddress(target) || !pinAddress(physicalTarget) || !pinAddress(detour)) return TPLLIB_INVALID;
     if(shared) {
         for(unsigned i=0;i<HOOK_COUNT;++i) if(!sharedTargets[i].patch.id) { group=static_cast<int>(i); break; }
         if(group<0) return TPLLIB_LIMIT;
@@ -373,23 +500,29 @@ TPLLib_Status createHook(TPLLib_Token owner,void* target,const uint8_t* expected
     if(!id) return TPLLIB_LIMIT;
     void* trampoline=0;
     void* destination=shared?route(group):detour;
-    if(MH_CreateHook(target,destination,&trampoline)!=MH_OK) return TPLLIB_BACKEND_ERROR;
+    if(MH_CreateHook(physicalTarget,destination,&trampoline)!=MH_OK) return TPLLIB_BACKEND_ERROR;
     Hook& hook=hooks[slot]; hook.id=id; hook.owner=owner; hook.target=target; hook.detour=detour;
     hook.enabled=false; hook.snapshotValid=false; hook.group=group;
     memcpy(hook.before,before,sizeof(before));
     if(shared) {
         SharedTarget& chain=sharedTargets[group]; chain.patch=hook;
-        chain.patch.detour=destination; chain.trampoline=trampoline;
+        chain.patch.target=physicalTarget; chain.patch.detour=destination; chain.trampoline=trampoline;
+        chain.foreign=foreignGuard;
+        memcpy(chain.expected,expected,sizeof(chain.expected));
         routeTo(group,trampoline); routeTo(HOOK_COUNT+slot,trampoline);
         *original=route(HOOK_COUNT+slot);
     } else *original=trampoline;
     *out=id; return TPLLIB_OK;
 }
 TPLLib_Status hookCreate(TPLLib_Token owner,void* target,const uint8_t* expected,void* detour,void** original,TPLLib_Token* out) {
-    return createHook(owner,target,expected,detour,original,out,false);
+    return createHook(owner,target,expected,detour,original,out,false,0);
 }
 TPLLib_Status hookCreateShared(TPLLib_Token owner,void* target,const uint8_t* expected,void* detour,void** original,TPLLib_Token* out) {
-    return createHook(owner,target,expected,detour,original,out,true);
+    return createHook(owner,target,expected,detour,original,out,true,0);
+}
+TPLLib_Status hookCreateSharedForeign(TPLLib_Token owner,void* target,const uint8_t* expected,
+    const TPLLib_ForeignHook* profile,void* detour,void** original,TPLLib_Token* out) {
+    return createHook(owner,target,expected,detour,original,out,true,profile);
 }
 bool recoverSnapshot(const Hook& hook,const unsigned char current[48]) {
     // MinHook x64 uses E9 to its FF25 relay, optionally preceded by a hotpatch.
@@ -455,6 +588,7 @@ TPLLib_Status hookEnable(TPLLib_Token owner,TPLLib_Token id,int enabled) {
         Hook& hook=hooks[i]; if(hook.owner!=owner) return TPLLIB_CONFLICT;
         if(hook.group<0) return setPhysical(hook,enabled!=0);
         Hook& physical=sharedTargets[hook.group].patch;
+        s=verifyForeignGuard(sharedTargets[hook.group].foreign); if(s) return s;
         bool needed=enabled!=0;
         for(unsigned j=0;j<HOOK_COUNT;++j)
             if(j!=i && hooks[j].id && hooks[j].group==hook.group && hooks[j].enabled) needed=true;
@@ -474,7 +608,9 @@ TPLLib_Status hookState(TPLLib_Token owner,TPLLib_Token id,TPLLib_HookState* out
         Hook& physical=hook.group<0?hook:sharedTargets[hook.group].patch;
         state.enabled=hook.enabled?1:0; state.shared=hook.group>=0?1:0;
         state.target_patched=physical.enabled?1:0;
-        s=verifyHook(physical); state.target_verified=s==TPLLIB_OK?1:0;
+        s=hook.group<0?TPLLIB_OK:verifyForeignGuard(sharedTargets[hook.group].foreign);
+        if(!s) s=verifyHook(physical);
+        state.target_verified=s==TPLLIB_OK?1:0;
         if(hook.group<0) { state.chain_members=1; state.chain_enabled=state.enabled; }
         else for(unsigned j=0;j<HOOK_COUNT;++j) if(hooks[j].id && hooks[j].group==hook.group) {
             ++state.chain_members; if(hooks[j].enabled) ++state.chain_enabled;
@@ -503,10 +639,10 @@ TPLLib_Status logMessage(const char* message) {
     return TPLLIB_OK;
 }
 const TPLLib_API api={sizeof(TPLLib_API),TPLLIB_ABI_VERSION,
-    TPLLIB_CAP_MODULES|TPLLIB_CAP_SIGNATURES|TPLLIB_CAP_HOOKS|TPLLIB_CAP_DISPATCH|TPLLIB_CAP_SERVICES|TPLLIB_CAP_LOGGING|TPLLIB_CAP_SHARED_HOOKS,
+    TPLLIB_CAP_MODULES|TPLLIB_CAP_SIGNATURES|TPLLIB_CAP_HOOKS|TPLLIB_CAP_DISPATCH|TPLLIB_CAP_SERVICES|TPLLIB_CAP_LOGGING|TPLLIB_CAP_SHARED_HOOKS|TPLLIB_CAP_FOREIGN_HOOK_CHAINS,
     TPLLIB_VERSION,&statusText,&isMainThread,&ownerOpen,&ownerClose,&moduleInfo,&readMemory,
     &resolveRva,&findUnique,&hookCreate,&hookEnable,&post,&cancelJob,&subscribe,&unsubscribe,&publish,&query,&stats,&logMessage,
-    &hookCreateShared,&hookState};
+    &hookCreateShared,&hookState,&hookCreateSharedForeign};
 void reportException() {
     ++callbackFailures;
     try { if(logger) logger("TPLLib callback threw; callback stopped (native faults are not isolated)"); } catch(...) {}
@@ -515,6 +651,7 @@ void reportException() {
 const TPLLib_API* getAPI(uint32_t version) { return version==TPLLIB_ABI_VERSION?&api:0; }
 #ifdef TPLLIB_TESTING
 void testFailNextHookSnapshot() { failHookSnapshot=true; }
+void testUseForeignProfile(const ForeignHookProfile* profile) { testForeignProfile=profile; }
 #endif
 bool initialize(void (*log)(const char*)) {
     LONG state=InterlockedCompareExchange(&initialized,1,0);
