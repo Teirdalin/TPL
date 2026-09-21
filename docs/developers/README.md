@@ -16,7 +16,7 @@ addresses to use TPL's public C API.
 5. [Porting from RE_Kenshi](MIGRATION.md): source adaptation and missing APIs.
 6. [Troubleshooting](TROUBLESHOOTING.md): symptoms, checks and actionable fixes.
 
-Download [TPL-SDK-0.1.0.zip](https://github.com/Teirdalin/TPL/releases/download/v0.1.0/TPL-SDK-0.1.0.zip)
+Download [TPL-SDK-0.1.1.zip](https://github.com/Teirdalin/TPL/releases/download/v0.1.1/TPL-SDK-0.1.1.zip)
 for a self-contained kit. The public repository contains the same authoring
 tools and docs. Tests and private research logs stay out of the source release.
 
@@ -46,8 +46,10 @@ scoped user playtest. These are different evidence levels, not full parity.
 
 There is no general character/squad/inventory/navigation API, automatic save
 serialization, native object-layout SDK, pre-menu startup or hot unloading.
-The old save-menu example is not a working deletion feature. Unchanged DLLs
-with unresolved KenshiLib imports remain blocked rather than guessed into use.
+The save-menu example now recognizes the reviewed two-column GamesList input
+route, but confirmation and deletion still require a disposable-save live
+test. Unchanged DLLs with unresolved native imports remain blocked rather than
+guessed into use.
 
 ## Your license
 

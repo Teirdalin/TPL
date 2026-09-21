@@ -170,9 +170,10 @@ Kinds: `TPLLIB_UI_BUTTON`, `TPLLIB_UI_LIST`. Flags: `VISIBLE`, `ENABLED`,
 valid. There are 32 sessions and 2,048 tracked live widgets; searches are bounded
 at 16,384 widgets and 128 levels. Native GUI-instance replacement is unsupported.
 
-The current save list's actual key delegates are on child widgets, not the
-outer GamesList expected by the old example. Do not publish a save-deletion
-feature based on this API without independently verifying that native route.
+The current save list's actual key delegates are on two ListBox column children,
+not the outer GamesList. The service recognizes only that reviewed structure
+and dispatches through the first column delegate. Do not publish a save-deletion
+feature based on this API without live confirmation and deletion acceptance.
 
 ## Engine service: `tpl.engine`, version 1
 

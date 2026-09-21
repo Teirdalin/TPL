@@ -10,7 +10,7 @@ $bin = Join-Path $vc 'bin\amd64'
 $cl = Join-Path $bin 'cl.exe'
 $build = Join-Path $root 'build'
 $dist = Join-Path $root 'dist'
-$runtime = Join-Path $dist 'TPL\versions\0.1.0'
+$runtime = Join-Path $dist 'TPL\versions\0.1.1'
 $mygui = Join-Path $root '.deps\mygui'
 $json = Join-Path $root '.deps\rapidjson'
 if (!(Test-Path $cl)) { throw 'The VC100 x64 toolchain is missing.' }
@@ -72,7 +72,7 @@ try {
 Copy-Item "$root\tools\TPL.Update.ps1" $runtime -Force
 Copy-Item "$root\tools\install.ps1" $dist -Force
 Copy-Item "$root\tools\uninstall.ps1" $dist -Force
-[IO.File]::WriteAllText("$dist\TPL\current.txt",'0.1.0')
+[IO.File]::WriteAllText("$dist\TPL\current.txt",'0.1.1')
 [IO.File]::WriteAllText("$dist\TPL\automatic-updates.txt",'on')
 & "$PSScriptRoot\stage-notices.ps1"
 $imports = & "$bin\dumpbin.exe" /nologo /imports "$runtime\TPL.Runtime.dll"

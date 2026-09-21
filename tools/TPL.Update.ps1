@@ -20,7 +20,7 @@ try {
     Atomic-Text $checkFile ([datetime]::UtcNow.ToString('o'))
     Atomic-Text (Join-Path $TplHomePath 'update-status.txt') 'Checking for updates...'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $headers = @{ 'User-Agent'='Teirdalin-TPL/0.1.0'; 'Accept'='application/vnd.github+json' }
+    $headers = @{ 'User-Agent'='Teirdalin-TPL/0.1.1'; 'Accept'='application/vnd.github+json' }
     $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/Teirdalin/TPL/releases/latest' -Headers $headers -TimeoutSec 30
     if ($release.draft -or $release.prerelease) { throw 'No stable release available.' }
     $versionText = ([string]$release.tag_name) -replace '^v',''

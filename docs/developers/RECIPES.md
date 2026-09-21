@@ -100,9 +100,10 @@ and callback context. On native destruction the token becomes stale. Reacquire
 on the GUI thread and avoid repeated creation in every tick. Close sessions
 explicitly outside callbacks. Check every result and preserve other mods' edits.
 
-Do not guess widget names from visible captions, synthesize arbitrary key
-events, or ship the old save-menu deletion example as working. See the exact
-[UI contract](API_REFERENCE.md#ui-service-tplui-version-1).
+Do not guess widget names from visible captions or synthesize arbitrary key
+events. The save-menu route is limited to the reviewed two-column GamesList
+shape and still requires live confirmation/deletion acceptance before release.
+See the exact [UI contract](API_REFERENCE.md#ui-service-tplui-version-1).
 
 ## Install a reviewed shared hook
 

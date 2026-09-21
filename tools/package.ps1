@@ -4,7 +4,7 @@ $root=Split-Path -Parent $PSScriptRoot
 $dist=Join-Path $root 'dist'
 if(!$OutputDirectory){$OutputDirectory=Join-Path $root 'build\release'}
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
-$full=Join-Path $OutputDirectory 'TPL-0.1.0.zip'
+$full=Join-Path $OutputDirectory 'TPL-0.1.1.zip'
 $runtime=Join-Path $OutputDirectory 'TPL-runtime.zip'
 foreach($path in @($full,$runtime,($full+'.sha256'),($runtime+'.sha256'))) {
     if(Test-Path -LiteralPath $path){throw 'Release output exists; retain it and choose a new directory.'}
@@ -12,8 +12,8 @@ foreach($path in @($full,$runtime,($full+'.sha256'),($runtime+'.sha256'))) {
 & "$PSScriptRoot\stage-notices.ps1"
 $files=@('TPL.dll','install.ps1','uninstall.ps1','README.md','LICENSE','PLUGIN_API_PERMISSION.md','THIRD_PARTY_NOTICES.md',
     'Licenses\JDL-1.txt','Licenses\MyGUI.LICENSE.txt','Licenses\RapidJSON.LICENSE.txt','Licenses\MinHook.LICENSE.txt',
-    'TPL\current.txt','TPL\automatic-updates.txt','TPL\versions\0.1.0\TPL.Runtime.dll',
-    'TPL\versions\0.1.0\TPL.Update.ps1','TPL\versions\0.1.0\runtime.json')
+    'TPL\current.txt','TPL\automatic-updates.txt','TPL\versions\0.1.1\TPL.Runtime.dll',
+    'TPL\versions\0.1.1\TPL.Update.ps1','TPL\versions\0.1.1\runtime.json')
 foreach($name in $files){if(!(Test-Path -LiteralPath (Join-Path $dist $name))){throw "Build output missing: $name"}}
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 Add-Type -AssemblyName System.IO.Compression,System.IO.Compression.FileSystem
@@ -24,7 +24,7 @@ try {
 $zip=[IO.Compression.ZipFile]::Open($runtime,[IO.Compression.ZipArchiveMode]::Create)
 try {
     foreach($name in @('TPL.Runtime.dll','TPL.Update.ps1','runtime.json')) {
-        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $dist ('TPL\versions\0.1.0\'+$name)),$name)
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $dist ('TPL\versions\0.1.1\'+$name)),$name)
     }
 } finally {$zip.Dispose()}
 foreach($path in @($full,$runtime)) {

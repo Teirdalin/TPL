@@ -5,11 +5,13 @@
 #include "tpllib_internal.h"
 #include <MyGUI_Gui.h>
 #include <MyGUI_Button.h>
+#include <MyGUI_ListBox.h>
 #include <MyGUI_MultiListBox.h>
 #include <MyGUI_WidgetManager.h>
 #include <MyGUI_InputManager.h>
 #include <stdexcept>
 #include <sstream>
+#include <vector>
 namespace tplui {
 namespace {
 MyGUI::Widget* widget(void* p) { return static_cast<MyGUI::Widget*>(p); }
@@ -21,6 +23,27 @@ MyGUI::Widget* root(MyGUI::Widget* p) {
 bool suffix(const std::string& name,const std::string& wanted) {
     return name==wanted || (name.size()>wanted.size() &&
         name[name.size()-wanted.size()-1]=='_' && name.compare(name.size()-wanted.size(),wanted.size(),wanted)==0);
+}
+void collectKeyLists(MyGUI::EnumeratorWidgetPtr iterator,std::vector<MyGUI::ListBox*>& found,
+    unsigned& remaining,unsigned depth) {
+    if(depth>128) throw std::runtime_error("UI key-route depth limit");
+    while(iterator.next()) {
+        if(!remaining--) throw std::runtime_error("UI key-route item limit");
+        MyGUI::Widget* child=iterator.current();
+        MyGUI::ListBox* list=child->castType<MyGUI::ListBox>(false);
+        if(list && !list->eventKeyButtonPressed.empty()) found.push_back(list);
+        collectKeyLists(child->getEnumerator(),found,remaining,depth+1);
+    }
+}
+MyGUI::Widget* keyTarget(MyGUI::Widget* target) {
+    if(!target->eventKeyButtonPressed.empty()) return target;
+    // Kenshi's LoadSaveWindow installs the same native key delegate on the two
+    // ListBox columns owned by GamesList, not on the outer MultiListBox. Route
+    // only this reviewed two-column structure; refuse every other composite.
+    if(!suffix(target->getName(),"GamesList") || !target->castType<MyGUI::MultiListBox>(false)) return 0;
+    std::vector<MyGUI::ListBox*> found; unsigned remaining=16384;
+    collectKeyLists(target->getEnumerator(),found,remaining,0);
+    return found.size()==2?found[0]:0;
 }
 void search(MyGUI::EnumeratorWidgetPtr iterator,const std::string& name,
     MyGUI::Widget*& found,unsigned& remaining,unsigned depth) {
@@ -118,7 +141,7 @@ public:
         MyGUI::Widget* w=widget(p); *parent=w->getParent();
         out.rect.left=w->getLeft(); out.rect.top=w->getTop(); out.rect.width=w->getWidth(); out.rect.height=w->getHeight();
         out.flags=flags(w); out.kind=0; out.selected=~uint64_t(0); out.count=0;
-        if(!w->eventKeyButtonPressed.empty()) out.flags|=TPLLIB_UI_KEY_HANDLER;
+        if(keyTarget(w)) out.flags|=TPLLIB_UI_KEY_HANDLER;
         if(w->castType<MyGUI::Button>(false)) out.kind=TPLLIB_UI_BUTTON;
         MyGUI::MultiListBox* list=w->castType<MyGUI::MultiListBox>(false);
         if(list) {
@@ -158,7 +181,9 @@ public:
     }
     bool sameRoot(void* a,void* b) { return root(widget(a))==root(widget(b)); }
     void key(void* p,uint32_t code) {
-        widget(p)->eventKeyButtonPressed(widget(p),MyGUI::KeyCode(static_cast<MyGUI::KeyCode::Enum>(code)),0);
+        MyGUI::Widget* target=keyTarget(widget(p));
+        if(!target) throw std::runtime_error("UI key route disappeared");
+        target->eventKeyButtonPressed(target,MyGUI::KeyCode(static_cast<MyGUI::KeyCode::Enum>(code)),0);
     }
 };
 MyGuiBackend live;

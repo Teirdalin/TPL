@@ -26,8 +26,9 @@ typedef void (*TPLLib_UI_Click)(void* user,TPLLib_Token sender);
 /* All operations require the GUI thread. Sessions own additions and reversible
    edits; widget handles expire on native destruction and are never recycled.
    Native key dispatch is allowed only during a real owned-button click, once,
-   to a visible/enabled MultiListBox in the same root. Version 1 supports only
-   TPLLIB_UI_DELETE_KEY. No process-wide key injection. */
+   to a visible/enabled MultiListBox in the same root. The reviewed Kenshi
+   GamesList route may dispatch through its two native ListBox columns. Version
+   1 supports only TPLLIB_UI_DELETE_KEY. No process-wide key injection. */
 typedef struct TPLLib_UI_API {
     uint32_t size,version;
     TPLLib_Status (*session_open)(const char* name,TPLLib_Token* session);
