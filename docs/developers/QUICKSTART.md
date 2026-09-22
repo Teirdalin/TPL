@@ -2,11 +2,11 @@
 
 ## 1. Install the essentials
 
-- Install the [TPL runtime](https://github.com/Teirdalin/TPL/releases/tag/v0.1.4)
+- Install the [TPL runtime](https://github.com/Teirdalin/TPL/releases/tag/v0.1.5)
   in Steam Kenshi 1.0.65 x64. Start it once and confirm Mods appears.
 - Install Visual Studio 2022 or its Build Tools with **Desktop development
   with C++**, the **v143 x64/x86 tools**, and a **Windows 10/11 SDK**.
-- Extract `TPL-SDK-0.1.4.zip` or clone the TPL source repository.
+- Extract `TPL-SDK-0.1.5.zip` or clone the TPL source repository.
 
 Visual Studio Community can edit/build the generated project. Build Tools is
 enough for the PowerShell workflow. The SDK does not bundle Microsoft compilers,

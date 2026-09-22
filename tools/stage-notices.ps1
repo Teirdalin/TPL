@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $dist=Join-Path $root 'dist'
-$runtime=Join-Path $dist 'TPL\versions\0.1.4'
+$runtime=Join-Path $dist 'TPL\versions\0.1.5'
 $licenses=Join-Path $dist 'Licenses'
 New-Item -ItemType Directory -Force -Path $runtime,$licenses | Out-Null
 foreach($name in @('LICENSE','PLUGIN_API_PERMISSION.md','THIRD_PARTY_NOTICES.md','README.md')) {
@@ -14,5 +14,5 @@ $texts=[ordered]@{}
 foreach($name in @('LICENSE','PLUGIN_API_PERMISSION.md','Licenses/JDL-1.txt','THIRD_PARTY_NOTICES.md','Licenses/MyGUI.LICENSE.txt','Licenses/RapidJSON.LICENSE.txt','Licenses/MinHook.LICENSE.txt')) {
     $texts[$name]=[IO.File]::ReadAllText((Join-Path $root $name))
 }
-$manifest=[ordered]@{version='0.1.4';bootstrapAbi=1;licenses=$texts}
+$manifest=[ordered]@{version='0.1.5';bootstrapAbi=1;licenses=$texts}
 [IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'),($manifest | ConvertTo-Json -Depth 4),(New-Object Text.UTF8Encoding($false)))

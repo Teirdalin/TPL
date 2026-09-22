@@ -47,7 +47,7 @@ a download and opens Mods for progress; Later leaves the installation alone.
 With automatic updates enabled, a successfully staged update asks the player
 to restart. Other modal windows defer the notice.
 
-These diagnostics shipped in 0.1.3. The 0.1.4 test build adds request-bound
+These diagnostics shipped in 0.1.3. Version 0.1.4 added request-bound
 version receipts: a previous launch's status or version file cannot report a
 successful current check. Checking/unchecked labels are white, a confirmed
 up-to-date result is green, and a confirmed newer release is red. The dark

@@ -15,7 +15,7 @@ $replaceBackup=$cfg+'.tpl-replace-'+[guid]::NewGuid().ToString('N')+'.bak'
 Remove-Item -LiteralPath $replaceBackup
 $bootstrap=Join-Path $GameDir 'TPL.dll'
 if(Test-Path -LiteralPath $bootstrap -PathType Leaf){Move-Item -LiteralPath $bootstrap -Destination ($bootstrap+'.tpl-uninstalled-'+$stamp+'.bak')}
-$version=Join-Path $GameDir 'TPL\versions\0.1.4'
+$version=Join-Path $GameDir 'TPL\versions\0.1.5'
 if(Test-Path -LiteralPath $version -PathType Container){Move-Item -LiteralPath $version -Destination ($version+'.uninstalled-'+$stamp)}
 Write-Output 'TPL uninstalled from startup. Plugins, settings, saves, and recovery backups were retained.'
 Write-Output "Plugin configuration backup: $backup"

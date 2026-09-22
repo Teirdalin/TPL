@@ -1,8 +1,9 @@
 # KEP compatibility investigation
 
-Status: implemented in the 0.1.4 test build; offline validation and local live
-startup passed. Options/save/gameplay acceptance remains pending. No KEP profile
-is included in TPL 0.1.3.
+Status: the Workshop profiles shipped in 0.1.4; offline validation and local live
+startup passed. Version 0.1.5 adds the separate KEP 0.17.1 manual-package builds
+described below. Their offline validation passed; live acceptance remains pending.
+Options/save/gameplay acceptance is still separate from startup validation.
 
 ## Supported capture
 
@@ -71,20 +72,39 @@ Do not copy KEP implementation into TPL. Extend the existing independently
 implemented foreign-profile mechanism using exact binary identity and observed
 hook-chain evidence. Preserve KEP's detour and original-call path.
 
-## Older Player Build
+## KEP 0.17.1 Manual Package
 
-1. Obtain Hobbit's installed kep-core-x64.dll and identify its SHA-256, or retest
-   with the captured current Workshop build.
-2. Capture all changed KCA hook targets using inspect-live-shared-hooks.py while
-   Kenshi is at the main menu. Record executable identity, detour RVAs, disk/live
-   entry bytes, relay bytes, and original trampoline return addresses.
-3. Review all overlaps, including Options create/save, not just the first failure.
-4. Add only exact-build profiles whose layouts pass existing validation. Keep
-   unknown builds, altered detours, and unsupported chains rejected.
-5. Test original-call routing, both owners' behavior, rollback, and rejection of
-   mismatched hashes, bytes, destinations, and trampoline layouts.
-6. Live-test KCA initialization and both plugins' Options controls/save behavior.
-   Offline tests alone do not establish coexistence.
+The supplied 0.17.1 archive contains different binaries, not renamed Workshop
+DLLs. Version 0.1.5 retains the Workshop profiles and adds these exact identities:
 
-The locally installed Workshop core is named kep-core-preload-x64.dll, unlike
-the player's logged kep-core-x64.dll. Do not substitute it without evidence.
+- `kep-core-x64.dll`:
+  `A387B5BDA59F7CDE7346526E72C6881F2CB82C0913F178AB0E2596F868E98CD0`.
+- `KenshiExtensionPlugin.dll`:
+  `01A41C8B9FD7A286FEBCEC8361C8929F388F0FC3F94EEF690739F4A38C1C0A0B`.
+
+The same six native targets are covered for the alternate executable identified
+above. Binary inspection verifies the imported target passed to GetRealAddress,
+the detour and original-pointer slot passed to AddHook, and the exact entry bytes.
+Core detours remain at 0x1260/0x12d0. Plugin detours are importGame 0x45030,
+createRandomCharacter 0x46fb0, CharStats init 0x42950, and addWound 0xef30.
+
+Profile selection now checks the complete binary identity before choosing among
+releases with an identical module name and RVA. A nonmatching candidate cannot
+shadow a later valid build; no matching build still fails without changing hooks.
+This matters for addWound, whose name, RVA, and initial bytes match both releases.
+
+Validation: six registration-site audits and 376 image-only checks across both
+KEP releases and both supported trampoline layouts passed. The images were mapped
+in isolated test processes without DLL initialization, import resolution, or
+execution of game/KEP code. Tests create and roll back synthetic patches against
+those images; they are not live captures. Shared/nested regression fixtures also
+exercise same-name/RVA candidates, unknown hashes, hook ordering, and rollback.
+
+Local evidence is in `build/KEP-0.17.1-compat/binary-evidence.json`,
+`build/kep-0171-image-tests.log`, and `build/kep-workshop-image-tests.log`.
+The supplied KEP binaries are never included in TPL packages.
+
+Remaining player test: fully restart with TPL 0.1.5, confirm KCA initializes,
+open and save both plugins' Options controls, then load a disposable save.
+If rejected, collect the full new TPL.log and inspect the actual chain. Unknown
+binary identities, altered entry bytes, and unreviewed chain layouts stay blocked.

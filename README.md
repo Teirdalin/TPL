@@ -13,7 +13,7 @@ Download either the installer or the ZIP from
 
 **Option 1: installer**
 
-Download and run `TPL-0.1.4-Installer.exe`. It finds your Kenshi folder, copies
+Download and run `TPL-0.1.5-Installer.exe`. It finds your Kenshi folder, copies
 the loader files, and updates Kenshi's plugin configuration for you. If TPL is
 already installed, it offers Reinstall and Uninstall.
 

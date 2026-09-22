@@ -344,6 +344,7 @@ void routeTo(unsigned index,void* destination) {
 }
 TPLLib_Status selectForeignDestination(void* target,const uint8_t* expected,void* destination,const TPLLib_ForeignHook** out) {
     *out=0;
+    TPLLib_Status unmatched=TPLLIB_CONFLICT;
     const ForeignHookProfile* profiles=foreignHookProfiles;
     unsigned count=sizeof(foreignHookProfiles)/sizeof(foreignHookProfiles[0]);
 #ifdef TPLLIB_TESTING
@@ -357,12 +358,19 @@ TPLLib_Status selectForeignDestination(void* target,const uint8_t* expected,void
         // plugins must never become implicit dependencies of another plugin.
         HMODULE foreign=GetModuleHandleW(p.foreign.module_name);
         if(!foreign || uintptr_t(destination)!=uintptr_t(foreign)+p.foreign.detour_rva) continue;
-        if(memcmp(expected,p.expected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
+        // Different releases can share a module name and detour RVA.
+        Module foreignBuild;
+        TPLLib_Status s=checkBuild(foreignBuild,p.foreign.module_name,p.foreign.module_sha256);
+        if(s==TPLLIB_VERSION_MISMATCH) { unmatched=s; continue; }
+        if(s) return s;
         Module verified;
-        TPLLib_Status s=checkBuild(verified,p.targetModule,p.targetSha256); if(s) return s;
+        s=checkBuild(verified,p.targetModule,p.targetSha256);
+        if(s==TPLLIB_VERSION_MISMATCH) { unmatched=s; continue; }
+        if(s) return s;
+        if(memcmp(expected,p.expected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
         *out=&p.foreign; return TPLLIB_OK;
     }
-    return TPLLIB_CONFLICT;
+    return unmatched;
 }
 bool absoluteJump(const unsigned char* bytes,void** destination) {
     uint32_t offset=1; memcpy(&offset,bytes+2,4);
