@@ -9,10 +9,16 @@ namespace tpl {
 struct Entry {
     std::wstring id, root, path, modFile, owner;
     std::string name, provider, status;
-    bool plugin, startEnabled, desiredEnabled, loaded, running, missing, attempted;
+    bool plugin, startEnabled, desiredEnabled, loaded, running, missing, attempted, failed;
     HMODULE module;
     TPL_TickFn tick;
-    Entry() : plugin(false),startEnabled(false),desiredEnabled(false),loaded(false),running(false),missing(false),attempted(false),module(0),tick(0) {}
+    Entry() : plugin(false),startEnabled(false),desiredEnabled(false),loaded(false),running(false),missing(false),attempted(false),failed(false),module(0),tick(0) {}
+};
+struct CatalogRow {
+    size_t index;
+    std::string name, provider, status, details, searchText;
+    bool enabled, mixed, pending, failed;
+    CatalogRow() : index(0),enabled(false),mixed(false),pending(false),failed(false) {}
 };
 class Catalog {
 public:
@@ -32,7 +38,8 @@ public:
     size_t reusedFolderCount() const { return cacheHits; }
     void startPlugins();
     void tick(float dt);
-    void toggle(size_t index);
+    std::vector<CatalogRow> rows() const;
+    void toggle(size_t index,bool includePlugins=false);
     bool blocked(const std::wstring& dll) const;
     std::vector<std::wstring> configs(size_t index) const;
 private:

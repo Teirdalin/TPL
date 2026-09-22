@@ -16,8 +16,8 @@ foreach($required in @('kenshi_x64.exe','Plugins_x64.cfg')){
     if(!(Test-Path -LiteralPath (Join-Path $GameDir $required) -PathType Leaf)){throw "The selected folder is not a Steam Kenshi installation: missing $required"}
 }
 $payload=@(
-    'TPL.dll','TPL\versions\0.1.3\TPL.Runtime.dll','TPL\versions\0.1.3\TPL.Update.ps1',
-    'TPL\versions\0.1.3\runtime.json','TPL\current.txt','TPL\automatic-updates.txt'
+    'TPL.dll','TPL\versions\0.1.4\TPL.Runtime.dll','TPL\versions\0.1.4\TPL.Update.ps1',
+    'TPL\versions\0.1.4\runtime.json','TPL\current.txt','TPL\automatic-updates.txt'
 )
 foreach($relative in $payload){if(!(Test-Path -LiteralPath (Join-Path $PayloadDir $relative) -PathType Leaf)){throw "Installer payload is incomplete: $relative"}}
 $stamp=Get-Date -Format 'yyyyMMdd-HHmmss-fff'
@@ -26,8 +26,8 @@ $cfgBackup=$cfg+'.tpl-'+$stamp+'.bak'
 Copy-Item -LiteralPath $cfg -Destination $cfgBackup
 $bootstrap=Join-Path $GameDir 'TPL.dll'
 if(Test-Path -LiteralPath $bootstrap -PathType Leaf){Copy-Item -LiteralPath $bootstrap -Destination ($bootstrap+'.'+$stamp+'.bak')}
-$versionSource=Join-Path $PayloadDir 'TPL\versions\0.1.3'
-$versionTarget=Join-Path $GameDir 'TPL\versions\0.1.3'
+$versionSource=Join-Path $PayloadDir 'TPL\versions\0.1.4'
+$versionTarget=Join-Path $GameDir 'TPL\versions\0.1.4'
 if(Test-Path -LiteralPath $versionTarget -PathType Container){
     $changed=@(Get-ChildItem -LiteralPath $versionSource | Where-Object {!$_.PSIsContainer} | Where-Object {
         $peer=Join-Path $versionTarget $_.Name
@@ -56,7 +56,7 @@ foreach($marker in @('current.txt','pending.txt','attempt.txt')){
 }
 $current=Join-Path $GameDir 'TPL\current.txt'
 $tempCurrent=$current+'.tpl-'+$stamp+'.tmp'
-[IO.File]::WriteAllText($tempCurrent,'0.1.3')
+[IO.File]::WriteAllText($tempCurrent,'0.1.4')
 if(Test-Path -LiteralPath $current){[IO.File]::Replace($tempCurrent,$current,$current+'.replace-'+$stamp+'.bak')}else{[IO.File]::Move($tempCurrent,$current)}
 foreach($marker in @('pending.txt','attempt.txt')){
     $path=Join-Path $GameDir ('TPL\'+$marker)

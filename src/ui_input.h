@@ -1,25 +1,33 @@
 #pragma once
 #include <string>
 namespace tpl {
-inline bool newerRelease(const std::string& current,const std::string& latest) {
-    unsigned parts[2][3]={{0}};
-    const std::string* versions[2]={&current,&latest};
-    for(unsigned v=0;v<2;++v) {
+inline bool releaseVersion(const std::string& version,unsigned* parts) {
         size_t p=0;
         for(unsigned n=0;n<3;++n) {
+            parts[n]=0;
             size_t start=p;
-            while(p<versions[v]->size() && (*versions[v])[p]>='0' && (*versions[v])[p]<='9') {
-                unsigned digit=(*versions[v])[p++]-'0';
-                if(parts[v][n]>(2147483647u-digit)/10) return false;
-                parts[v][n]=parts[v][n]*10+digit;
+            while(p<version.size() && version[p]>='0' && version[p]<='9') {
+                unsigned digit=version[p++]-'0';
+                if(parts[n]>(2147483647u-digit)/10) return false;
+                parts[n]=parts[n]*10+digit;
             }
             if(start==p) return false;
-            if(n<2 && (p>=versions[v]->size() || (*versions[v])[p++]!='.')) return false;
+            if(n<2 && (p>=version.size() || version[p++]!='.')) return false;
         }
-        if(p!=versions[v]->size()) return false;
-    }
+        return p==version.size();
+}
+inline bool newerRelease(const std::string& current,const std::string& latest) {
+    unsigned parts[2][3]={{0}};
+    if(!releaseVersion(current,parts[0]) || !releaseVersion(latest,parts[1])) return false;
     for(unsigned n=0;n<3;++n) if(parts[0][n]!=parts[1][n]) return parts[1][n]>parts[0][n];
     return false;
+}
+inline bool verifiedReleaseResult(const std::string& request,const std::string& receipt,std::string& latest) {
+    latest.clear();
+    if(request.empty() || receipt.compare(0,request.size()+1,request+"\n")) return false;
+    std::string version=receipt.substr(request.size()+1);
+    unsigned parts[3]; if(!releaseVersion(version,parts)) return false;
+    latest=version; return true;
 }
 // Rebuild stale font users before opening a window, outside input dispatch.
 struct UiFrameRequests {

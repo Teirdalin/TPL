@@ -13,7 +13,7 @@ Download either the installer or the ZIP from
 
 **Option 1: installer**
 
-Download and run `TPL-0.1.3-Installer.exe`. It finds your Kenshi folder, copies
+Download and run `TPL-0.1.4-Installer.exe`. It finds your Kenshi folder, copies
 the loader files, and updates Kenshi's plugin configuration for you. If TPL is
 already installed, it offers Reinstall and Uninstall.
 
@@ -39,7 +39,7 @@ because a DLL appears in the Mods list.
 
 ## Features
 
-- Main-menu Mods list for FCS mods and native plugins.
+- Main-menu Mods list combines each mod with its bundled plugins, with errors taking priority.
 - Enable/disable selections applied at the next launch.
 - In-game editing of supported bundled text `.cfg` files, with backups.
 - TPLLib plugin API: logging, checked addresses, hooks, shared TPL hook chains,

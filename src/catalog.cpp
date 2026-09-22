@@ -284,7 +284,41 @@ void Catalog::saveState() {
     for(std::set<std::wstring>::const_iterator i=disabled.begin();i!=disabled.end();++i) { std::string s=narrow(*i); w.String(s.c_str()); }
     w.EndArray(); w.EndObject(); writeFile(join(home,L"state.json"),buffer.GetString());
 }
-void Catalog::toggle(size_t index) {
+std::vector<CatalogRow> Catalog::rows() const {
+    std::map<std::wstring,size_t> owners;
+    for(size_t i=0;i<entries.size();++i) if(!entries[i].plugin) owners[entries[i].id]=i;
+    std::map<size_t,size_t> positions;
+    std::vector<CatalogRow> out;
+    std::vector<std::set<std::string> > providers;
+    std::vector<int> priorities;
+    for(size_t i=0;i<entries.size();++i) {
+        const Entry& e=entries[i]; size_t primary=i;
+        std::map<std::wstring,size_t>::const_iterator owner=owners.find(e.owner);
+        if(e.plugin && !e.owner.empty() && owner!=owners.end()) primary=owner->second;
+        std::map<size_t,size_t>::iterator position=positions.find(primary);
+        if(position==positions.end()) {
+            CatalogRow row; row.index=primary; row.name=entries[primary].name; row.enabled=e.desiredEnabled;
+            row.provider=entries[primary].provider;
+            positions[primary]=out.size(); out.push_back(row); priorities.push_back(-1);
+            providers.push_back(std::set<std::string>()); providers.back().insert(row.provider);
+            position=positions.find(primary);
+        }
+        size_t index=position->second; CatalogRow& row=out[index];
+        row.mixed=row.mixed || row.enabled!=e.desiredEnabled;
+        row.enabled=row.enabled && e.desiredEnabled;
+        row.pending=row.pending || e.startEnabled!=e.desiredEnabled;
+        bool failed=e.failed || e.missing;
+        int priority=failed?3:(e.plugin?(e.startEnabled && !e.loaded?2:1):0);
+        if(priority>priorities[index]) {
+            priorities[index]=priority; row.status=e.status; row.failed=failed;
+            row.details=e.plugin?narrow(filename(e.path))+": "+e.status:e.status;
+        }
+        if(providers[index].insert(e.provider).second) row.provider+=" + "+e.provider;
+        row.searchText+=" "+e.name+" "+e.provider+" "+narrow(filename(e.path));
+    }
+    return out;
+}
+void Catalog::toggle(size_t index,bool includePlugins) {
     if(index>=entries.size()) throw std::runtime_error("No mod selected");
     Entry& e=entries[index];
     if(e.provider=="External") throw std::runtime_error("This plugin is managed outside TPL and RE_Kenshi manifests");
@@ -298,6 +332,12 @@ void Catalog::toggle(size_t index) {
     }
     std::set<std::wstring> oldDisabled=disabled, oldActive=active;
     bool enable=!e.desiredEnabled;
+    if(includePlugins && !e.plugin) {
+        for(size_t i=0;i<entries.size();++i) if(entries[i].owner==e.id && !entries[i].desiredEnabled) enable=true;
+        for(size_t i=0;i<entries.size();++i) if(entries[i].owner==e.id) {
+            if(enable) disabled.erase(entries[i].id); else disabled.insert(entries[i].id);
+        }
+    }
     if(enable) disabled.erase(e.id); else disabled.insert(e.id);
     if(!e.plugin) { if(enable) active.insert(lower(e.modFile)); else active.erase(lower(e.modFile)); }
     try {
@@ -356,7 +396,7 @@ void Catalog::queueOrderedPlugins(bool legacy) {
         else if(count>1) for(size_t i=0;i<entries.size();++i) {
             Entry& e=entries[i];
             for(size_t j=0;j<entries.size();++j) if(entries[j].id==e.owner && lower(entries[j].modFile)==launchOrder[n] && e.provider==provider) {
-                e.attempted=true; e.status="Ambiguous mod folders; skipped";
+                e.attempted=true; e.failed=true; e.status="Ambiguous mod folders; skipped";
             }
         }
     }
@@ -402,7 +442,7 @@ void Catalog::preparePluginStartup() {
         for(size_t i=0;i<entries.size();++i) {
             Entry& e=entries[i];
             if(e.provider=="RE_Kenshi preload" && e.startEnabled && !e.attempted) {
-                e.attempted=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
+                e.attempted=true; e.failed=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
             }
         }
     } else legacySuppressed=true;
@@ -419,7 +459,7 @@ bool Catalog::startPluginStep() {
             for(size_t i=0;i<entries.size();++i) {
                 Entry& e=entries[i];
                 if(e.provider=="RE_Kenshi preload" && e.startEnabled && !e.attempted) {
-                    e.attempted=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
+                    e.attempted=true; e.failed=true; e.status="Requires early preload support; skipped"; log(e.name+": "+e.status);
                 }
             }
             startupComplete=startupQueue.empty();
@@ -438,7 +478,7 @@ bool Catalog::startPluginStep() {
 }
 void Catalog::startEntry(Entry& e,bool legacy) {
     static TPL_Host host={sizeof(TPL_Host),TPL_ABI_VERSION,0,&log,&tpllib::getAPI}; host.game_directory=game.c_str();
-    e.attempted=true;
+    e.attempted=true; e.failed=true;
     log("[Plugin start] "+e.name+" ["+e.provider+"] "+narrow(e.path));
     try {
         if(GetModuleHandleW(e.path.c_str())) { e.status="Already loaded; initialization skipped"; return; }
@@ -462,7 +502,7 @@ void Catalog::startEntry(Entry& e,bool legacy) {
             typedef void (*LegacyStart)();
             LegacyStart start=(LegacyStart)GetProcAddress(h,"?startPlugin@@YAXXZ");
             if(!start) { e.status="Missing legacy startPlugin export"; log(e.name+": "+e.status); return; }
-            start(); e.running=true; e.status=bridged?"Legacy start returned (TPLLib bridge)":"Legacy start returned (TPL)"; log(e.name+": "+e.status); return;
+            start(); e.running=true; e.failed=false; e.status=bridged?"Legacy start returned (TPLLib bridge)":"Legacy start returned (TPL)"; log(e.name+": "+e.status); return;
         }
         TPL_StartFn start=(TPL_StartFn)GetProcAddress(h,"TPL_Start");
         if(!start) { e.status="Missing TPL_Start"; return; }
@@ -471,14 +511,14 @@ void Catalog::startEntry(Entry& e,bool legacy) {
             std::ostringstream message; message<<"Initialization failed (plugin return "<<result<<"); see TPL.log";
             e.status=message.str(); log(e.name+": "+e.status+". Return codes are plugin-defined, not TPLLib status codes."); return;
         }
-        e.tick=(TPL_TickFn)GetProcAddress(h,"TPL_Tick"); e.running=true; e.status="Running";
+        e.tick=(TPL_TickFn)GetProcAddress(h,"TPL_Tick"); e.running=true; e.failed=false; e.status="Running";
     } catch(const std::exception& error) { e.status=std::string("Initialization exception: ")+error.what(); log(e.name+": "+e.status); }
     catch(...) { e.status="Initialization threw an exception"; log(e.name+": initialization exception"); }
 }
 void Catalog::tick(float dt) {
     tpllib::frame(dt);
     for(size_t i=0;i<entries.size();++i) if(entries[i].running && entries[i].tick) {
-        try { entries[i].tick(dt); } catch(...) { entries[i].tick=0; entries[i].status="Tick failed; callbacks stopped"; }
+        try { entries[i].tick(dt); } catch(...) { entries[i].tick=0; entries[i].failed=true; entries[i].status="Tick failed; callbacks stopped"; }
     }
 }
 std::vector<std::wstring> Catalog::configs(size_t index) const {

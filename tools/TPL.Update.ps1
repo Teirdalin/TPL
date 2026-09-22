@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$TplHomePath,[switch]$Force,[switch]$CheckOnly)
+param([Parameter(Mandatory=$true)][string]$TplHomePath,[switch]$Force,[switch]$CheckOnly,[string]$RequestId)
 $ErrorActionPreference = 'Stop'
 $TplHomePath = [IO.Path]::GetFullPath($TplHomePath)
 function Atomic-Text([string]$Path,[string]$Text) {
@@ -20,7 +20,7 @@ try {
     Atomic-Text $checkFile ([datetime]::UtcNow.ToString('o'))
     Atomic-Text (Join-Path $TplHomePath 'update-status.txt') 'Checking for updates...'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $headers = @{ 'User-Agent'='Teirdalin-TPL/0.1.3'; 'Accept'='application/vnd.github+json' }
+    $headers = @{ 'User-Agent'='Teirdalin-TPL/0.1.4'; 'Accept'='application/vnd.github+json' }
     $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/Teirdalin/TPL/releases/latest' -Headers $headers -TimeoutSec 30
     if ($release.draft -or $release.prerelease) { throw 'No stable release available.' }
     $versionText = ([string]$release.tag_name) -replace '^v',''
@@ -28,6 +28,8 @@ try {
     Atomic-Text (Join-Path $TplHomePath 'latest.txt') $versionText
     $version = [version]$versionText
     $current = [version]([IO.File]::ReadAllText((Join-Path $TplHomePath 'current.txt')).Trim())
+    # Only a successful metadata request can attest to this in-game check.
+    if($RequestId){Atomic-Text (Join-Path $TplHomePath 'update-result.txt') ($RequestId+"`n"+$versionText)}
     if ($version -le $current) { Atomic-Text (Join-Path $TplHomePath 'update-status.txt') 'TPL is up to date.'; exit 0 }
     if ($CheckOnly) {
         Atomic-Text (Join-Path $TplHomePath 'update-status.txt') ('TPL ' + $versionText + ' is available.')

@@ -9,7 +9,7 @@ $OutputPath=[IO.Path]::GetFullPath($OutputPath)
 $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
 if(!(Test-Path -LiteralPath $csc)){throw '.NET Framework C# compiler not found.'}
 $map=@(
-    'TPL.dll','TPL\versions\0.1.3\TPL.Runtime.dll','TPL\versions\0.1.3\TPL.Update.ps1','TPL\versions\0.1.3\runtime.json',
+    'TPL.dll','TPL\versions\0.1.4\TPL.Runtime.dll','TPL\versions\0.1.4\TPL.Update.ps1','TPL\versions\0.1.4\runtime.json',
     'TPL\current.txt','TPL\automatic-updates.txt','README.md','LICENSE','PLUGIN_API_PERMISSION.md','THIRD_PARTY_NOTICES.md',
     'Licenses\JDL-1.txt','Licenses\MyGUI.LICENSE.txt','Licenses\RapidJSON.LICENSE.txt','Licenses\MinHook.LICENSE.txt'
 )

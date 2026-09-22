@@ -5,11 +5,11 @@ if(!$PayloadDirectory){$PayloadDirectory=Join-Path $root 'dist'}
 $PayloadDirectory=(Resolve-Path -LiteralPath $PayloadDirectory).Path
 if(!$OutputDirectory){$OutputDirectory=Join-Path $root 'build\player-installers'}
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
-$manual=Join-Path $OutputDirectory 'TPL-0.1.3-Manual.zip'
-$installer=Join-Path $OutputDirectory 'TPL-0.1.3-Installer.exe'
+$manual=Join-Path $OutputDirectory 'TPL-0.1.4-Manual.zip'
+$installer=Join-Path $OutputDirectory 'TPL-0.1.4-Installer.exe'
 foreach($path in @($manual,$installer,($manual+'.sha256'),($installer+'.sha256'))){if(Test-Path -LiteralPath $path){throw "Output exists; retain it and choose a new directory: $path"}}
 $payload=@(
-    'TPL.dll','TPL\versions\0.1.3\TPL.Runtime.dll','TPL\versions\0.1.3\TPL.Update.ps1','TPL\versions\0.1.3\runtime.json',
+    'TPL.dll','TPL\versions\0.1.4\TPL.Runtime.dll','TPL\versions\0.1.4\TPL.Update.ps1','TPL\versions\0.1.4\runtime.json',
     'TPL\current.txt','TPL\automatic-updates.txt','README.md','LICENSE','PLUGIN_API_PERMISSION.md','THIRD_PARTY_NOTICES.md',
     'Licenses\JDL-1.txt','Licenses\MyGUI.LICENSE.txt','Licenses\RapidJSON.LICENSE.txt','Licenses\MinHook.LICENSE.txt'
 )

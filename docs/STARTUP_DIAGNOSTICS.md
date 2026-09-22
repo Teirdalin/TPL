@@ -47,4 +47,23 @@ a download and opens Mods for progress; Later leaves the installation alone.
 With automatic updates enabled, a successfully staged update asks the player
 to restart. Other modal windows defer the notice.
 
-These changes are staged for 0.1.3, not yet published or installed for live testing.
+These diagnostics shipped in 0.1.3. The 0.1.4 test build adds request-bound
+version receipts: a previous launch's status or version file cannot report a
+successful current check. Checking/unchecked labels are white, a confirmed
+up-to-date result is green, and a confirmed newer release is red. The dark
+panel's labels and commands also use white text for contrast.
+
+## Combined Mod Rows
+
+The Mods view groups native plugins by their recorded parent mod ID. It does
+not merge unrelated installs with matching names, change load order, or hide
+standalone/unmanaged plugins. Native load failures, missing files, exceptions,
+and skipped initialization take priority over healthy plugin or FCS status.
+The selected row identifies the failing DLL. Search still matches bundled DLL
+names, and Config scans the owning mod folder as before.
+
+The combined toggle applies to the mod and all its recorded plugins as one
+persisted change. Existing partial selections show Mixed; clicking that state
+enables the bundle. Restart indicators include changes to any child plugin.
+External mod-order edits still reject the whole change and restore the previous
+in-memory selection.

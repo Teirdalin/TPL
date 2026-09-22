@@ -16,7 +16,7 @@ addresses to use TPL's public C API.
 5. [Porting from RE_Kenshi](MIGRATION.md): source adaptation and missing APIs.
 6. [Troubleshooting](TROUBLESHOOTING.md): symptoms, checks and actionable fixes.
 
-Download [TPL-SDK-0.1.3.zip](https://github.com/Teirdalin/TPL/releases/download/v0.1.3/TPL-SDK-0.1.3.zip)
+Download [TPL-SDK-0.1.4.zip](https://github.com/Teirdalin/TPL/releases/download/v0.1.4/TPL-SDK-0.1.4.zip)
 for a self-contained kit. The public repository contains the same authoring
 tools and docs. Tests and private research logs stay out of the source release.
 

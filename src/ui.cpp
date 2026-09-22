@@ -34,10 +34,16 @@ static MyGUI::TextBox* editorStatus=0;
 static std::vector<std::wstring> configPaths;
 static ConfigDocument document;
 static size_t selected=MyGUI::ITEM_NONE, openFile=MyGUI::ITEM_NONE;
+static std::vector<CatalogRow> modRows;
 static bool rebuilding=false, choosing=false;
 static DWORD lastStatusPoll=0;
 static DWORD lastCatalogRefresh=0;
 static bool updatePending=false;
+static bool latestVerified=false;
+static std::string checkedLatest;
+static const MyGUI::Colour readableText(1.0f,1.0f,1.0f);
+static const MyGUI::Colour currentText(0.48f,1.0f,0.58f);
+static const MyGUI::Colour outdatedText(1.0f,0.53f,0.53f);
 static bool catalogObserved=false, catalogDirty=false;
 static bool (*originalKeyPress)(MyGUI::InputManager*,MyGUI::KeyCode,MyGUI::Char)=0;
 static bool (*originalKeyRelease)(MyGUI::InputManager*,MyGUI::KeyCode)=0;
@@ -103,13 +109,13 @@ static void destroyPanels() {
 }
 static MyGUI::TextBox* label(MyGUI::Widget* root,int x,int y,int w,int h,const std::string& text) {
     MyGUI::TextBox* t=root->createWidget<MyGUI::TextBox>("Kenshi_TextboxStandardText",x,y,w,h,MyGUI::Align::Default);
-    t->setCaption(display(text)); t->setNeedMouseFocus(false); return t;
+    t->setCaption(display(text)); t->setTextColour(readableText); t->setNeedMouseFocus(false); return t;
 }
 static MyGUI::Button* button(MyGUI::Widget* root,int x,int y,int w,int h,const std::string& text,void (*fn)(MyGUI::Widget*),const std::string& name="") {
     MyGUI::Button* b=root->createWidget<MyGUI::Button>("Kenshi_Button1",x,y,w,h,MyGUI::Align::Default,name);
-    b->setCaption(text); b->eventMouseButtonClick+=MyGUI::newDelegate(fn); return b;
+    b->setCaption(text); b->setTextColour(readableText); b->eventMouseButtonClick+=MyGUI::newDelegate(fn); return b;
 }
-static void setStatus(const std::string& text) { if(status) status->setCaption(display(text)); }
+static void setStatus(const std::string& text) { if(status) { status->setCaption(display(text)); status->setTextColour(readableText); } }
 static std::string versionFile(const wchar_t* name,const char* fallback) {
     std::wstring path=join(catalog.home,name);
     return exists(path)?trim(readFile(path,128)):fallback;
@@ -117,41 +123,46 @@ static std::string versionFile(const wchar_t* name,const char* fallback) {
 static void showVersions(bool checking) {
     if(!versionStatus) return;
     std::string current=versionFile(L"current.txt","Unknown");
-    std::string latest=checking?"Checking...":versionFile(L"latest.txt","Unavailable");
+    std::string latest=checking?"Checking...":(latestVerified?checkedLatest:"Not checked");
     versionStatus->setCaption(display("Current: "+current+"    Latest: "+latest));
+    versionStatus->setTextColour(checking || !latestVerified?readableText:
+        (newerRelease(current,checkedLatest)?outdatedText:currentText));
 }
 static void selection(MyGUI::MultiListBox*,size_t index) {
     if(rebuilding) return;
     selected=MyGUI::ITEM_NONE;
     if(index!=MyGUI::ITEM_NONE) { size_t* data=table->getItemDataAt<size_t>(index,false); if(data) selected=*data; }
     bool valid=selected<catalog.entries.size();
+    const CatalogRow* row=0;
+    for(size_t i=0;i<modRows.size();++i) if(modRows[i].index==selected) { row=&modRows[i]; break; }
     configButton->setEnabled(valid && !catalog.configs(selected).empty());
     enableButton->setEnabled(valid && !catalog.entries[selected].missing && catalog.entries[selected].provider!="External");
-    enableButton->setStateSelected(valid && catalog.entries[selected].desiredEnabled);
-    if(valid) {
-        const Entry& e=catalog.entries[selected];
-        setStatus(e.name+" | "+e.status+(e.startEnabled!=e.desiredEnabled?" | Restart required":""));
+    enableButton->setStateSelected(valid && row && row->enabled);
+    if(valid && row) {
+        setStatus(row->name+" | "+row->details+(row->pending?" | Restart required":""));
+        if(status && row->failed) status->setTextColour(outdatedText);
     }
 }
 static void populate() {
     if(!table) return; rebuilding=true; table->removeAllItems();
     std::wstring query=lower(widen(search->getOnlyText().asUTF8()));
     size_t retained=MyGUI::ITEM_NONE;
-    for(size_t i=0;i<catalog.entries.size();++i) {
-        Entry& e=catalog.entries[i];
-        if(!query.empty() && lower(widen(e.name+" "+e.provider)).find(query)==std::wstring::npos) continue;
-        size_t row=table->getItemCount(); table->addItem(display(e.name),i);
-        table->setSubItemNameAt(1,row,e.provider);
-        table->setSubItemNameAt(2,row,e.status);
-        table->setSubItemNameAt(3,row,e.desiredEnabled?"On":"Off");
-        table->setSubItemNameAt(4,row,e.startEnabled!=e.desiredEnabled?"Restart":"");
-        if(i==selected) retained=row;
+    modRows=catalog.rows();
+    for(size_t i=0;i<modRows.size();++i) {
+        const CatalogRow& e=modRows[i];
+        if(!query.empty() && lower(widen(e.searchText)).find(query)==std::wstring::npos) continue;
+        size_t row=table->getItemCount(); table->addItem(display(e.name),e.index);
+        table->setSubItemNameAt(1,row,display(e.provider));
+        table->setSubItemNameAt(2,row,display(e.status));
+        table->setSubItemNameAt(3,row,e.mixed?"Mixed":(e.enabled?"On":"Off"));
+        table->setSubItemNameAt(4,row,e.pending?"Restart":"");
+        if(e.index==selected) retained=row;
     }
     table->setIndexSelected(retained); rebuilding=false; selection(table,retained);
 }
 static void queryChanged(MyGUI::EditBox*) { populate(); }
 static void toggleClicked(MyGUI::Widget*) {
-    try { catalog.toggle(selected); populate(); setStatus("Saved. Restart Kenshi to apply mod changes."); }
+    try { catalog.toggle(selected,true); populate(); setStatus("Saved. Restart Kenshi to apply mod changes."); }
     catch(const std::exception& e) { setStatus(e.what()); }
 }
 static void refreshClicked(MyGUI::Widget*) { catalog.observeModules(); populate(); }
@@ -211,11 +222,12 @@ static void closePanel(MyGUI::Widget*) {
 }
 static void checkUpdate(MyGUI::Widget*) {
     try {
+        latestVerified=false; checkedLatest.clear(); availableVersion.clear();
         showVersions(true);
         if(!updatePending) { runUpdater(true); updatePending=true; }
         setStatus("Checking GitHub Releases. Updates apply on the next launch.");
     }
-    catch(const std::exception& e) { setStatus(e.what()); }
+    catch(const std::exception& e) { showVersions(false); setStatus(e.what()); }
 }
 static void automaticClicked(MyGUI::Widget* sender) {
     MyGUI::Button* b=sender->castType<MyGUI::Button>(); bool next=!b->getStateSelected();
@@ -366,17 +378,24 @@ static void frame(float dt) {
         }
         if(updatePending && GetTickCount()-lastStatusPoll>1000) {
             lastStatusPoll=GetTickCount(); std::wstring path=join(catalog.home,L"update-status.txt");
-            if(exists(path)) {
-                std::string message=trim(readFile(path,4096)); setStatus(message);
-                bool checking=updaterRunning();
-                showVersions(checking);
-                if(!checking) {
-                    updatePending=false;
-                    std::string latest=versionFile(L"latest.txt","");
-                    if(message.find("Update failed:")!=0 && message!="Checking for updates..." &&
-                        newerRelease(versionFile(L"current.txt",""),latest)) availableVersion=latest;
+            bool checking=updaterRunning();
+            if(checking) setStatus("Checking for updates...");
+            else {
+                updatePending=false;
+                std::wstring receipt=join(catalog.home,L"update-result.txt");
+                latestVerified=verifiedReleaseResult(updaterRequestId(),exists(receipt)?trim(readFile(receipt,128)):"",checkedLatest);
+                std::string message=exists(path)?trim(readFile(path,4096)):"";
+                bool failed=message.find("Update failed:")==0;
+                if(!latestVerified) setStatus(failed?message:"Update check not completed. Try again.");
+                else {
+                    bool newer=newerRelease(versionFile(L"current.txt",""),checkedLatest);
+                    if(newer) availableVersion=checkedLatest;
+                    setStatus(failed?message:(newer?(versionFile(L"pending.txt","")==checkedLatest?
+                        "TPL "+checkedLatest+" is ready. Restart Kenshi to apply.":"TPL "+checkedLatest+" is available."):"TPL is up to date."));
+                    if(status) status->setTextColour(failed || newer?outdatedText:currentText);
                 }
             }
+            showVersions(checking);
         }
         if(options && continueButton && options->getParent()==continueButton->getParent())
             showUpdateNotice(options->getParent());

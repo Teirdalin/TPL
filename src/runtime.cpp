@@ -4,6 +4,8 @@
 namespace tpl {
 static std::wstring runtimeDirectory;
 static HANDLE updaterProcess=0;
+static std::string updateRequest;
+std::string updaterRequestId() { return updateRequest; }
 bool updaterRunning() {
     if(!updaterProcess) return false;
     if(WaitForSingleObject(updaterProcess,0)!=WAIT_OBJECT_0) return true;
@@ -25,6 +27,10 @@ void runUpdater(bool force,bool checkOnly) {
     std::wstring executable=join(windows,L"System32\\WindowsPowerShell\\v1.0\\powershell.exe");
     std::wstring command=L"\""+executable+L"\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+L"\" -TplHomePath \""+catalog.home+L"\""+(force?L" -Force":L"");
     if(checkOnly) command+=L" -CheckOnly";
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    char request[40]; sprintf_s(request,"%08lx%08lx%08lx",now.dwHighDateTime,now.dwLowDateTime,GetCurrentProcessId());
+    updateRequest=request;
+    command+=L" -RequestId "+widen(updateRequest);
     writeFile(join(catalog.home,L"update-status.txt"),"Checking for updates...",false);
     STARTUPINFOW si; PROCESS_INFORMATION pi; ZeroMemory(&si,sizeof(si)); ZeroMemory(&pi,sizeof(pi));
     si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=SW_HIDE;
@@ -49,6 +55,6 @@ extern "C" __declspec(dllexport) int TPL_RuntimeStart(const wchar_t* game,const 
         }
         else if(re) tpl::log("Unsupported RE_Kenshi binary; native toggle enforcement unavailable");
         if(!tpl::installUi(ready)) { tpl::log("Missing supported MyGUI initialization import"); return 1; }
-        tpl::log("TPL 0.1.3 initialized"); return 0;
+        tpl::log("TPL 0.1.4 initialized"); return 0;
     } catch(const std::exception& e) { tpl::log(std::string("TPL initialization failed: ")+e.what()); return 1; }
 }

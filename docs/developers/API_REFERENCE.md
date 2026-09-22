@@ -97,7 +97,9 @@ concurrent access to game-owned data.
   a TPL chain. Pass reviewed original bytes even if TPL already patches it.
   Exclusive/shared modes cannot mix. Duplicate detours in a chain fail.
   A shipped exact build-pair profile can admit a known foreign detour; this
-  still verifies both modules, original bytes and the relay/trampoline.
+  still verifies both modules, original bytes and the relay/trampoline. Nested
+  foreign chains are bounded to four distinct reviewed destinations and must
+  end at the original native body; unknown intermediate links remain conflicts.
 - `hook_enable(owner, hook, enabled)`: enabled must be 0 or 1. Only the owner
   can change a hook. Disabling is not a join. Shared order is creation order,
   newest first; re-enabling does not reorder the chain.
@@ -106,13 +108,15 @@ concurrent access to game-owned data.
   It can return `CONFLICT` while still reporting useful state; initialize size.
 - `hook_create_shared_foreign(owner, target, expected32, &profile, detour,
   &continuation, &hook)`: optional tail; check
-  `TPLLIB_HAS_FOREIGN_HOOK_CHAINS`. Wraps one already-installed, explicitly
+  `TPLLIB_HAS_FOREIGN_HOOK_CHAINS`. Wraps the outer already-installed, explicitly
   profiled MinHook-style detour. The profile supplies its loaded module name,
   disk SHA-256, detour RVA and reviewed 32 entry bytes. TPL also verifies the
   native entry tail and relay/trampoline back to that exact target. The foreign
   hook remains owned by its original loader. TPL wraps the foreign detour entry;
   it preserves the original native patch and trampoline, and rechecks them
-  before changing routes or reporting verified state.
+  before changing routes or reporting verified state. The explicit profile
+  covers only the outer detour: nested links require shipped exact build-pair
+  profiles, and their entry bytes and continuations are rechecked as well.
 
 An exclusive enable returning `BUSY` can leave the physical hook active but
 unverified. A shared enable returning `BUSY` may leave the target patched while
