@@ -26,6 +26,7 @@ public:
     bool discoveryComplete() const { return scanComplete; }
     void refreshLaunchSelection();
     void observeModules();
+    std::vector<std::string> startupWarnings() const;
     bool startPluginStep();
     bool pluginStartupComplete() const { return startupComplete; }
     size_t reusedFolderCount() const { return cacheHits; }

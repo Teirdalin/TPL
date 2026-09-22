@@ -1,4 +1,4 @@
-param([string]$OutputDirectory,[string]$Version='0.1.2')
+param([string]$OutputDirectory,[string]$Version='0.1.3')
 $ErrorActionPreference='Stop'
 function Get-Sha256([string]$Path) {
     $stream=[IO.File]::OpenRead($Path)

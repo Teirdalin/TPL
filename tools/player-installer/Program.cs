@@ -20,9 +20,9 @@ namespace TPLInstaller {
     internal static class InstallerCore {
         internal static readonly Payload[] Files=new Payload[] {
             new Payload("TPL.Payload.0","TPL.dll",false),
-            new Payload("TPL.Payload.1","TPL\\versions\\0.1.2\\TPL.Runtime.dll",false),
-            new Payload("TPL.Payload.2","TPL\\versions\\0.1.2\\TPL.Update.ps1",false),
-            new Payload("TPL.Payload.3","TPL\\versions\\0.1.2\\runtime.json",false),
+            new Payload("TPL.Payload.1","TPL\\versions\\0.1.3\\TPL.Runtime.dll",false),
+            new Payload("TPL.Payload.2","TPL\\versions\\0.1.3\\TPL.Update.ps1",false),
+            new Payload("TPL.Payload.3","TPL\\versions\\0.1.3\\runtime.json",false),
             new Payload("TPL.Payload.4","TPL\\current.txt",true),
             new Payload("TPL.Payload.5","TPL\\automatic-updates.txt",true),
             new Payload("TPL.Payload.6","TPL\\README.md",false),
@@ -97,13 +97,22 @@ namespace TPLInstaller {
             File.Copy(cfg,cfgBackup,false);
             string bootstrap=Path.Combine(game,"TPL.dll");
             if(File.Exists(bootstrap)) File.Copy(bootstrap,bootstrap+"."+stamp+".bak",false);
-            string version=Path.Combine(game,@"TPL\versions\0.1.2");
+            string version=Path.Combine(game,@"TPL\versions\0.1.3");
             if(Directory.Exists(version) && VersionChanges(game,data)) CopyDirectory(version,version+".backup-"+stamp);
             foreach(Payload payload in Files) {
                 string destination=Contained(game,payload.RelativePath);
                 if(payload.Preserve && File.Exists(destination)) continue;
                 AtomicWrite(destination,data[payload.Resource]);
                 if(!EqualBytes(destination,data[payload.Resource])) throw new IOException("Installed file checksum mismatch: "+payload.RelativePath);
+            }
+            foreach(string marker in new string[]{"current.txt","pending.txt","attempt.txt"}) {
+                string path=Path.Combine(game,"TPL\\"+marker);
+                if(File.Exists(path)) File.Copy(path,path+".tpl-"+stamp+".bak",false);
+            }
+            AtomicWrite(Path.Combine(game,@"TPL\current.txt"),Encoding.UTF8.GetBytes("0.1.3"));
+            foreach(string marker in new string[]{"pending.txt","attempt.txt"}) {
+                string path=Path.Combine(game,"TPL\\"+marker);
+                if(File.Exists(path)) File.Delete(path);
             }
             AtomicWrite(cfg,UpdateConfiguration(File.ReadAllText(cfg),true));
             InstallResult result=new InstallResult(); result.GameDirectory=game; result.ConfigurationBackup=cfgBackup; return result;
@@ -118,7 +127,7 @@ namespace TPLInstaller {
             AtomicWrite(cfg,UpdateConfiguration(File.ReadAllText(cfg),false));
             string bootstrap=Path.Combine(game,"TPL.dll");
             if(File.Exists(bootstrap)) File.Move(bootstrap,bootstrap+".tpl-uninstalled-"+stamp+".bak");
-            string version=Path.Combine(game,@"TPL\versions\0.1.2");
+            string version=Path.Combine(game,@"TPL\versions\0.1.3");
             if(Directory.Exists(version)) Directory.Move(version,version+".uninstalled-"+stamp);
             InstallResult result=new InstallResult(); result.GameDirectory=game; result.ConfigurationBackup=cfgBackup; return result;
         }

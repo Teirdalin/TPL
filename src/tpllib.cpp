@@ -6,6 +6,7 @@
 #include <wincrypt.h>
 #include <float.h>
 #include <string.h>
+#include <sstream>
 #include "tpllib_internal.h"
 #include "tpllib_foreign_profiles.h"
 #include <MinHook.h>
@@ -13,7 +14,7 @@
 namespace tpllib {
 namespace {
 const unsigned OWNER_COUNT=128, HOOK_COUNT=256, JOB_COUNT=1024, FRAME_COUNT=256, SERVICE_COUNT=128;
-struct Owner { TPLLib_Token id; char name[96]; };
+struct Owner { TPLLib_Token id; char name[96]; bool conflictReported; };
 struct Job { TPLLib_Token id, owner; TPLLib_Job fn; void* user; };
 struct Frame { TPLLib_Token id, owner; TPLLib_Frame fn; void* user; };
 struct Service { TPLLib_Token owner; char name[96]; uint32_t version, bytes; const void* table; };
@@ -225,7 +226,7 @@ TPLLib_Status ownerOpen(const char* name,TPLLib_Token* out) {
     }
     if(slot==OWNER_COUNT) return TPLLIB_LIMIT;
     TPLLib_Token id=token(); if(!id) return TPLLIB_LIMIT;
-    owners[slot].id=id; strcpy_s(owners[slot].name,name); *out=id; return TPLLIB_OK;
+    owners[slot].id=id; owners[slot].conflictReported=false; strcpy_s(owners[slot].name,name); *out=id; return TPLLIB_OK;
 }
 TPLLib_Status ownerClose(TPLLib_Token owner) {
     TPLLib_Status s=mainOnly(); if(s) return s;
@@ -335,6 +336,16 @@ void routeTo(unsigned index,void* destination) {
 }
 TPLLib_Status selectForeignProfile(void* target,const uint8_t* expected,const TPLLib_ForeignHook** out) {
     *out=0;
+    unsigned char entry[32],relay[14];
+    if(readMemory(target,entry,sizeof(entry)) || entry[0]!=0xe9 ||
+        memcmp(entry+5,expected+5,27)) return TPLLIB_CONFLICT;
+    int32_t displacement=0; memcpy(&displacement,entry+1,4);
+    void* relayAddress=reinterpret_cast<void*>(uintptr_t(target)+5+displacement);
+    if(readMemory(relayAddress,relay,sizeof(relay)) || relay[0]!=0xff || relay[1]!=0x25)
+        return TPLLIB_CONFLICT;
+    uint32_t indirect=1; memcpy(&indirect,relay+2,4);
+    if(indirect) return TPLLIB_CONFLICT;
+    void* destination=0; memcpy(&destination,relay+6,sizeof(destination));
     const ForeignHookProfile* profiles=foreignHookProfiles;
     unsigned count=sizeof(foreignHookProfiles)/sizeof(foreignHookProfiles[0]);
 #ifdef TPLLIB_TESTING
@@ -344,6 +355,10 @@ TPLLib_Status selectForeignProfile(void* target,const uint8_t* expected,const TP
         const ForeignHookProfile& p=profiles[i];
         HMODULE module=GetModuleHandleW(p.targetModule);
         if(!module || uintptr_t(target)!=uintptr_t(module)+p.targetRva) continue;
+        // A target address is not an owner identity. Absent/unrelated optional
+        // plugins must never become implicit dependencies of another plugin.
+        HMODULE foreign=GetModuleHandleW(p.foreign.module_name);
+        if(!foreign || uintptr_t(destination)!=uintptr_t(foreign)+p.foreign.detour_rva) continue;
         if(memcmp(expected,p.expected,TPLLIB_HOOK_BYTES)) return TPLLIB_CONFLICT;
         Module verified;
         TPLLib_Status s=checkBuild(verified,p.targetModule,p.targetSha256); if(s) return s;
@@ -514,15 +529,59 @@ TPLLib_Status createHook(TPLLib_Token owner,void* target,const uint8_t* expected
     } else *original=trampoline;
     *out=id; return TPLLIB_OK;
 }
+std::string diagnosticAddress(void* address) {
+    std::ostringstream text;
+    HMODULE module=0;
+    if(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        reinterpret_cast<const char*>(address),&module)) {
+        char path[32768]={0};
+        if(GetModuleFileNameA(module,path,sizeof(path))) text<<path<<"+0x"<<std::hex<<(uintptr_t(address)-uintptr_t(module));
+        else text<<address;
+    } else text<<address<<" (private or unknown memory)";
+    return text.str();
+}
+TPLLib_Status reportHookConflict(TPLLib_Token owner,void* target,TPLLib_Status result) {
+    if(result!=TPLLIB_CONFLICT || !logger || !isMainThread()) return result;
+    try {
+        for(unsigned i=0;i<OWNER_COUNT;++i) if(owners[i].id==owner) {
+            if(owners[i].conflictReported) return result;
+            owners[i].conflictReported=true;
+            std::ostringstream message;
+            message<<"[Hook conflict] owner="<<owners[i].name<<" status=8 target="<<diagnosticAddress(target);
+            for(unsigned j=0;j<HOOK_COUNT;++j) if(hooks[j].id && hooks[j].target==target) {
+                for(unsigned k=0;k<OWNER_COUNT;++k) if(owners[k].id==hooks[j].owner)
+                    message<<" registered-owner="<<owners[k].name;
+            }
+            // Observe at most two direct/indirect jumps. Never execute or modify them.
+            void* cursor=target;
+            for(unsigned depth=0;depth<2;++depth) {
+                unsigned char bytes[6]; if(readMemory(cursor,bytes,sizeof(bytes))) break;
+                int32_t displacement=0; void* next=0;
+                if(bytes[0]==0xe9) {
+                    memcpy(&displacement,bytes+1,4); next=reinterpret_cast<void*>(uintptr_t(cursor)+5+displacement);
+                } else if(bytes[0]==0xff && bytes[1]==0x25) {
+                    memcpy(&displacement,bytes+2,4);
+                    if(readMemory(reinterpret_cast<void*>(uintptr_t(cursor)+6+displacement),&next,sizeof(next))) break;
+                } else break;
+                message<<" observed-jump="<<diagnosticAddress(next);
+                if(next==cursor) break;
+                cursor=next;
+            }
+            message<<". Patch/ownership validation failed; observed destinations do not prove which plugin installed the patch. No checks bypassed. Share full TPL.log; restart after changing plugins.";
+            logger(message.str().c_str()); break;
+        }
+    } catch(...) { /* Diagnostics must not change hook results. */ }
+    return result;
+}
 TPLLib_Status hookCreate(TPLLib_Token owner,void* target,const uint8_t* expected,void* detour,void** original,TPLLib_Token* out) {
-    return createHook(owner,target,expected,detour,original,out,false,0);
+    return reportHookConflict(owner,target,createHook(owner,target,expected,detour,original,out,false,0));
 }
 TPLLib_Status hookCreateShared(TPLLib_Token owner,void* target,const uint8_t* expected,void* detour,void** original,TPLLib_Token* out) {
-    return createHook(owner,target,expected,detour,original,out,true,0);
+    return reportHookConflict(owner,target,createHook(owner,target,expected,detour,original,out,true,0));
 }
 TPLLib_Status hookCreateSharedForeign(TPLLib_Token owner,void* target,const uint8_t* expected,
     const TPLLib_ForeignHook* profile,void* detour,void** original,TPLLib_Token* out) {
-    return createHook(owner,target,expected,detour,original,out,true,profile);
+    return reportHookConflict(owner,target,createHook(owner,target,expected,detour,original,out,true,profile));
 }
 bool recoverSnapshot(const Hook& hook,const unsigned char current[48]) {
     // MinHook x64 uses E9 to its FF25 relay, optionally preceded by a hotpatch.

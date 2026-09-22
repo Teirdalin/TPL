@@ -16,8 +16,8 @@ foreach($required in @('kenshi_x64.exe','Plugins_x64.cfg')){
     if(!(Test-Path -LiteralPath (Join-Path $GameDir $required) -PathType Leaf)){throw "The selected folder is not a Steam Kenshi installation: missing $required"}
 }
 $payload=@(
-    'TPL.dll','TPL\versions\0.1.2\TPL.Runtime.dll','TPL\versions\0.1.2\TPL.Update.ps1',
-    'TPL\versions\0.1.2\runtime.json','TPL\current.txt','TPL\automatic-updates.txt'
+    'TPL.dll','TPL\versions\0.1.3\TPL.Runtime.dll','TPL\versions\0.1.3\TPL.Update.ps1',
+    'TPL\versions\0.1.3\runtime.json','TPL\current.txt','TPL\automatic-updates.txt'
 )
 foreach($relative in $payload){if(!(Test-Path -LiteralPath (Join-Path $PayloadDir $relative) -PathType Leaf)){throw "Installer payload is incomplete: $relative"}}
 $stamp=Get-Date -Format 'yyyyMMdd-HHmmss-fff'
@@ -26,8 +26,8 @@ $cfgBackup=$cfg+'.tpl-'+$stamp+'.bak'
 Copy-Item -LiteralPath $cfg -Destination $cfgBackup
 $bootstrap=Join-Path $GameDir 'TPL.dll'
 if(Test-Path -LiteralPath $bootstrap -PathType Leaf){Copy-Item -LiteralPath $bootstrap -Destination ($bootstrap+'.'+$stamp+'.bak')}
-$versionSource=Join-Path $PayloadDir 'TPL\versions\0.1.2'
-$versionTarget=Join-Path $GameDir 'TPL\versions\0.1.2'
+$versionSource=Join-Path $PayloadDir 'TPL\versions\0.1.3'
+$versionTarget=Join-Path $GameDir 'TPL\versions\0.1.3'
 if(Test-Path -LiteralPath $versionTarget -PathType Container){
     $changed=@(Get-ChildItem -LiteralPath $versionSource | Where-Object {!$_.PSIsContainer} | Where-Object {
         $peer=Join-Path $versionTarget $_.Name
@@ -50,6 +50,18 @@ foreach($relative in $payload){
     if((Get-TPLHash $source) -ne (Get-TPLHash $target)){throw "Installed file checksum mismatch: $relative"}
 }
 $text=[IO.File]::ReadAllText($cfg)
+foreach($marker in @('current.txt','pending.txt','attempt.txt')){
+    $path=Join-Path $GameDir ('TPL\'+$marker)
+    if(Test-Path -LiteralPath $path){Copy-Item -LiteralPath $path -Destination ($path+'.tpl-'+$stamp+'.bak')}
+}
+$current=Join-Path $GameDir 'TPL\current.txt'
+$tempCurrent=$current+'.tpl-'+$stamp+'.tmp'
+[IO.File]::WriteAllText($tempCurrent,'0.1.3')
+if(Test-Path -LiteralPath $current){[IO.File]::Replace($tempCurrent,$current,$current+'.replace-'+$stamp+'.bak')}else{[IO.File]::Move($tempCurrent,$current)}
+foreach($marker in @('pending.txt','attempt.txt')){
+    $path=Join-Path $GameDir ('TPL\'+$marker)
+    if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path}
+}
 $lines=@($text -split '\r?\n' | Where-Object {$_ -notmatch '^\s*Plugin\s*=\s*TPL\s*$'})
 $result=New-Object 'Collections.Generic.List[string]'
 $inserted=$false

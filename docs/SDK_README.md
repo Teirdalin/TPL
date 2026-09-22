@@ -1,4 +1,4 @@
-# TPL developer kit 0.1.2
+# TPL developer kit 0.1.3
 
 Start with [Your first plugin](docs/developers/QUICKSTART.md), or open the
 [full developer guide](docs/developers/README.md).
@@ -19,7 +19,7 @@ cd C:\KenshiMods\MyFirstMod
 ./build.ps1
 ```
 
-Install [TPL](https://github.com/Teirdalin/TPL/releases/tag/v0.1.2) separately
+Install [TPL](https://github.com/Teirdalin/TPL/releases/tag/v0.1.3) separately
 before deploying to the game. The modern starter uses only the public C API;
 raw native game C++ bindings still require their reviewed legacy ABI. This
 kit does not claim full KenshiLib functionality or automatic plugin conversion.

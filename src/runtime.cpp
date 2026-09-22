@@ -3,6 +3,12 @@
 
 namespace tpl {
 static std::wstring runtimeDirectory;
+static HANDLE updaterProcess=0;
+bool updaterRunning() {
+    if(!updaterProcess) return false;
+    if(WaitForSingleObject(updaterProcess,0)!=WAIT_OBJECT_0) return true;
+    CloseHandle(updaterProcess); updaterProcess=0; return false;
+}
 static HMODULE (WINAPI *originalLoad)(LPCWSTR)=0;
 static HMODULE WINAPI reLoad(LPCWSTR path) {
     if(path) {
@@ -11,16 +17,19 @@ static HMODULE WINAPI reLoad(LPCWSTR path) {
     }
     return originalLoad(path);
 }
-void runUpdater(bool force) {
+void runUpdater(bool force,bool checkOnly) {
+    if(updaterRunning()) return;
     std::wstring script=join(runtimeDirectory,L"TPL.Update.ps1");
     if(!exists(script)) throw std::runtime_error("Updater is missing");
     wchar_t windows[MAX_PATH]; GetWindowsDirectoryW(windows,MAX_PATH);
     std::wstring executable=join(windows,L"System32\\WindowsPowerShell\\v1.0\\powershell.exe");
     std::wstring command=L"\""+executable+L"\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+L"\" -TplHomePath \""+catalog.home+L"\""+(force?L" -Force":L"");
+    if(checkOnly) command+=L" -CheckOnly";
+    writeFile(join(catalog.home,L"update-status.txt"),"Checking for updates...",false);
     STARTUPINFOW si; PROCESS_INFORMATION pi; ZeroMemory(&si,sizeof(si)); ZeroMemory(&pi,sizeof(pi));
     si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=SW_HIDE;
     if(!CreateProcessW(executable.c_str(),&command[0],0,0,FALSE,CREATE_NO_WINDOW,0,catalog.game.c_str(),&si,&pi)) throw std::runtime_error("Cannot start updater");
-    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread); updaterProcess=pi.hProcess;
 }
 }
 extern "C" __declspec(dllexport) int TPL_RuntimeStart(const wchar_t* game,const wchar_t* runtime,void (*ready)()) {
@@ -40,6 +49,6 @@ extern "C" __declspec(dllexport) int TPL_RuntimeStart(const wchar_t* game,const 
         }
         else if(re) tpl::log("Unsupported RE_Kenshi binary; native toggle enforcement unavailable");
         if(!tpl::installUi(ready)) { tpl::log("Missing supported MyGUI initialization import"); return 1; }
-        tpl::log("TPL 0.1.2 initialized"); return 0;
+        tpl::log("TPL 0.1.3 initialized"); return 0;
     } catch(const std::exception& e) { tpl::log(std::string("TPL initialization failed: ")+e.what()); return 1; }
 }

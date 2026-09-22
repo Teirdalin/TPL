@@ -367,9 +367,33 @@ void Catalog::queueOrderedPlugins(bool legacy) {
             startupQueue.push_back(std::make_pair(i,legacy));
     }
 }
+std::vector<std::string> Catalog::startupWarnings() const {
+    std::vector<std::string> warnings;
+    std::map<std::wstring,size_t> first;
+    for(size_t i=0;i<entries.size();++i) {
+        const Entry& e=entries[i];
+        if(!e.plugin || e.missing || (!e.startEnabled && !e.loaded)) continue;
+        std::wstring dll=lower(filename(e.path));
+        std::map<std::wstring,size_t>::const_iterator found=first.find(dll);
+        if(found==first.end()) first[dll]=i;
+        else {
+            const Entry& other=entries[found->second];
+            if(other.id!=e.id)
+                warnings.push_back("Possible duplicate plugin (matching DLL filename, not proof of conflict): "+
+                    narrow(other.path)+" ["+other.provider+"] and "+narrow(e.path)+" ["+e.provider+"]");
+        }
+        if(e.provider=="TPL" && e.loaded && !e.attempted)
+            warnings.push_back("TPL plugin already loaded before TPL startup; its initializer will not be called again: "+narrow(e.path));
+    }
+    return warnings;
+}
 void Catalog::preparePluginStartup() {
     if(startupPrepared) return;
     startupPrepared=true;
+    const std::vector<std::string> warnings=startupWarnings();
+    for(size_t i=0;i<warnings.size();++i) log("[Startup check] "+warnings[i]);
+    log("[Startup check] RE_Kenshi.dll "+std::string(GetModuleHandleW(L"RE_Kenshi.dll")?"loaded":"not loaded")+
+        "; loader presence alone is not a conflict. Hook compatibility is checked when requested.");
     if(!tpllib::initialize(&log)) { log("TPLLib initialization failed; plugin startup skipped"); startupComplete=true; return; }
     queueOrderedPlugins(false);
     rePresent=rePresent || GetModuleHandleW(L"RE_Kenshi.dll")!=0;
@@ -415,6 +439,7 @@ bool Catalog::startPluginStep() {
 void Catalog::startEntry(Entry& e,bool legacy) {
     static TPL_Host host={sizeof(TPL_Host),TPL_ABI_VERSION,0,&log,&tpllib::getAPI}; host.game_directory=game.c_str();
     e.attempted=true;
+    log("[Plugin start] "+e.name+" ["+e.provider+"] "+narrow(e.path));
     try {
         if(GetModuleHandleW(e.path.c_str())) { e.status="Already loaded; initialization skipped"; return; }
         HMODULE h=0; bool bridged=false;
@@ -441,7 +466,11 @@ void Catalog::startEntry(Entry& e,bool legacy) {
         }
         TPL_StartFn start=(TPL_StartFn)GetProcAddress(h,"TPL_Start");
         if(!start) { e.status="Missing TPL_Start"; return; }
-        if(start(&host)!=0) { e.status="Initialization failed"; return; }
+        int result=start(&host);
+        if(result!=0) {
+            std::ostringstream message; message<<"Initialization failed (plugin return "<<result<<"); see TPL.log";
+            e.status=message.str(); log(e.name+": "+e.status+". Return codes are plugin-defined, not TPLLib status codes."); return;
+        }
         e.tick=(TPL_TickFn)GetProcAddress(h,"TPL_Tick"); e.running=true; e.status="Running";
     } catch(const std::exception& error) { e.status=std::string("Initialization exception: ")+error.what(); log(e.name+": "+e.status); }
     catch(...) { e.status="Initialization threw an exception"; log(e.name+": initialization exception"); }
